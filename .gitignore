@@ -1,0 +1,15 @@
+# Compiled object files
+*.o
+
+# Executables
+*.exe
+*.out
+
+# IDE files
+.vscode/
+*.vscode/
+*.code-workspace
+
+# Dependency directories
+/bin/
+/lib/
