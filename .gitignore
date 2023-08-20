@@ -1,5 +1,6 @@
 # Compiled object files
 *.o
+build/
 
 # Executables
 *.exe
@@ -7,9 +8,13 @@
 
 # IDE files
 .vscode/
+.idea/
 *.vscode/
 *.code-workspace
 
 # Dependency directories
 /bin/
 /lib/
+
+# System files
+.DS_Store

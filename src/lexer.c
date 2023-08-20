@@ -5,6 +5,39 @@
 #include <string.h>
 #include "include/token.h"
 
+void scan_token(Lexer* lexer);
+
+char advance(Lexer* lexer);
+
+void add_token(Lexer* lexer, TokenType type);
+
+void add_token_with_literal(Lexer* lexer,
+                            TokenType type,
+                            char* lexeme,
+                            Literal* literal);
+
+void _add_token(Lexer* lexer, Token* token);
+
+bool is_at_end(Lexer* lexer);
+
+bool match(Lexer* lexer, char expected);
+
+char peek(Lexer* lexer);
+
+char peek_next(Lexer* lexer);
+
+void parse_string(Lexer* lexer);
+
+bool is_digit(char c);
+
+void parse_number(Lexer* lexer);
+
+void parse_identifier(Lexer* lexer);
+
+char* substr(const char* src, int start, int end);
+
+bool is_alpha(char c);
+
 Lexer* new_lexer(char* source) {
   Lexer* lexer = calloc(1, sizeof(Lexer));
   lexer->source = source;
@@ -12,7 +45,7 @@ Lexer* new_lexer(char* source) {
   lexer->current = 0;
   lexer->line = 0;
   lexer->num_tokens = 0;
-  lexer->tokens = calloc(lexer->num_tokens, sizeof(Token));
+  lexer->tokens = calloc(1, sizeof(Token*));
   return lexer;
 };
 
@@ -101,7 +134,8 @@ void scan_token(Lexer* lexer) {
       } else if (is_alpha(c)) {
         parse_identifier(lexer);
       } else {
-        fprintf(stderr, "Error: Unexpected character at %d.\n", lexer->line);
+        fprintf(stderr, "Lexer Error: Unexpected character at %d.\n",
+                lexer->line);
         exit(EXIT_FAILURE);
       }
       break;
@@ -124,13 +158,14 @@ void add_token_with_literal(Lexer* lexer,
                             char* lexeme,
                             Literal* literal) {
   _add_token(lexer, new_token(type, lexeme, literal, lexer->line));
+  free(lexeme);
 };
 
 void _add_token(Lexer* lexer, Token* token) {
   int len = lexer->num_tokens;
-  lexer->tokens = realloc(lexer->tokens, sizeof(Token) * (len + 1));
+  lexer->tokens = realloc(lexer->tokens, sizeof(Token*) * (len + 1));
   if (lexer->tokens == NULL) {
-    fprintf(stderr, "Memory allocation failed.\n");
+    fprintf(stderr, "Lexer Error: Memory allocation failed.\n");
     exit(EXIT_FAILURE);
   }
   lexer->num_tokens = len + 1;
@@ -138,7 +173,7 @@ void _add_token(Lexer* lexer, Token* token) {
 }
 
 bool is_at_end(Lexer* lexer) {
-  return lexer->current >= strlen(lexer->source) ||
+  return lexer->current >= (int)strlen(lexer->source) ||
          lexer->source[lexer->current] == '\0';
 };
 
@@ -158,7 +193,7 @@ char peek(Lexer* lexer) {
 };
 
 char peek_next(Lexer* lexer) {
-  if (lexer->current + 1 >= strlen(lexer->source))
+  if (lexer->current + 1 >= (int)strlen(lexer->source))
     return '\0';
   return lexer->source[lexer->current + 1];
 };
@@ -171,7 +206,7 @@ void parse_string(Lexer* lexer) {
   }
 
   if (is_at_end(lexer)) {
-    fprintf(stderr, "Error: Unterminated string at %d.\n", lexer->line);
+    fprintf(stderr, "Lexer Error: Unterminated string at %d.\n", lexer->line);
     exit(EXIT_FAILURE);
     return;
   }
@@ -212,11 +247,11 @@ void parse_identifier(Lexer* lexer) {
     advance(lexer);
   char* lexeme = substr(lexer->source, lexer->start, lexer->current);
   TokenType type = map_keyword(lexeme);
-  if (type != -1) {  // keywords
+  if (type != (TokenType)-1) {  // keywords
     add_token(lexer, type);
   } else {  // identifier
     Literal* literal = (Literal*)malloc(sizeof(Literal));
-    literal->identifer = strdup(lexeme);
+    literal->identifier = strdup(lexeme);
     add_token_with_literal(lexer, IDENTIFIER, lexeme, literal);
   }
 };
@@ -226,7 +261,7 @@ char* substr(const char* src, int start, int end) {
   char* dest = (char*)malloc(
       (len + 1) * sizeof(char));  // Allocate memory for the destination string
   if (dest == NULL) {
-    fprintf(stderr, "Memory allocation failed.\n");
+    fprintf(stderr, "Lexer Error: Memory allocation failed.\n");
     return NULL;
   }
 
@@ -240,5 +275,5 @@ bool is_digit(char c) {
 };
 
 bool is_alpha(char c) {
-  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'z') || c == '_';
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 };

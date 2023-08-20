@@ -3,7 +3,7 @@
 
 typedef union {
   char* string;
-  char* identifer;
+  char* identifier;
   double number;
 } Literal;
 
@@ -61,10 +61,7 @@ typedef struct Token {
   int line;
 } Token;
 
-Token* new_token(TokenType type,
-                 const char* lexeme,
-                 Literal* literal,
-                 int line);
+Token* new_token(TokenType type, char* lexeme, Literal* literal, int line);
 
 TokenType map_keyword(char* text);
 

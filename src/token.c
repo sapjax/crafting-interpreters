@@ -4,10 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-Token* new_token(TokenType type,
-                 const char* lexeme,
-                 Literal* literal,
-                 int line) {
+Token* new_token(TokenType type, char* lexeme, Literal* literal, int line) {
   Token* token = (Token*)malloc(sizeof(Token));
   if (token == NULL) {
     fprintf(stderr, "Memory allocation failed.\n");

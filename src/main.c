@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "include/lexer.h"
+#include "include/parser.h"
 
 int main(int argc, char** argv) {
   if (argc < 2) {
@@ -23,7 +24,10 @@ int main(int argc, char** argv) {
   source[length] = '\0';
 
   Lexer* lexer = new_lexer(source);
-  scan_tokens(lexer);
+  Token** tokens = scan_tokens(lexer);
   print_lexer(lexer);
+  Parser* parser = new_parser(tokens, lexer->num_tokens);
+  Expr* expression = parse(parser);
+  print_ast(expression);
   return 0;
 }
