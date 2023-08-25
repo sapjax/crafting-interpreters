@@ -33,4 +33,7 @@ $(BUILD_DIR):
 clean:
 	rm -rf $(BUILD_DIR)
 
+lint:
+	clang-tidy $(SRCS) -- $(CFLAGS)
+
 .PHONY: all clean

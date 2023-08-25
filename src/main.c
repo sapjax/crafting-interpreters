@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include "include/interpreter.h"
 #include "include/lexer.h"
 #include "include/parser.h"
 
@@ -29,5 +30,6 @@ int main(int argc, char** argv) {
   Parser* parser = new_parser(tokens, lexer->num_tokens);
   Expr* expression = parse(parser);
   print_ast(expression);
+  interpret(expression);
   return 0;
 }
