@@ -28,8 +28,8 @@ int main(int argc, char** argv) {
   Token** tokens = scan_tokens(lexer);
   print_lexer(lexer);
   Parser* parser = new_parser(tokens, lexer->num_tokens);
-  Expr* expression = parse(parser);
-  print_ast(expression);
-  interpret(expression);
+  Statement** statements = parse(parser);
+  print_ast(statements);
+  interpret(statements);
   return 0;
 }

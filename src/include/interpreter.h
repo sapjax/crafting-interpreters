@@ -2,7 +2,7 @@
 #define LOX_INTERPRETER_H
 #include <ctype.h>
 #include <stdbool.h>
-#include "parser.h"
+#include "expression.h"
 
 typedef union Value {
   char* string;
@@ -27,7 +27,9 @@ Value* new_value();
 
 Object* new_object();
 
-void interpret(Expr* expr);
+void interpret(Statement* statements[]);
+
+void execute(Statement* statement);
 
 Object* evaluate(Expr* expr);
 

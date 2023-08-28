@@ -17,11 +17,31 @@ Object* new_object() {
   return obj;
 };
 
-void interpret(Expr* expr) {
-  Object* obj = evaluate(expr);
-  char* str = stringify(obj);
-  free(obj);
-  log_info("%s\n", str);
+void interpret(Statement** statements) {
+  for (int i = 0; statements[i] != NULL; i++) {
+    Statement* stmt = statements[i];
+    execute(stmt);
+  }
+  free(statements);
+};
+
+void execute(Statement* statement) {
+  switch (statement->type) {
+    case STATEMENT_EXPRESSION: {
+      Object* obj = evaluate(statement->expr);
+      free(obj);
+      break;
+    }
+    case STATEMENT_PRINT: {
+      Object* obj = evaluate(statement->expr);
+      char* str = stringify(obj);
+      log_info("%s\n", str);
+      free(obj);
+      break;
+    }
+    default:
+      break;
+  }
 };
 
 Object* evaluate(Expr* expr) {

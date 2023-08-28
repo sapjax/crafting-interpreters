@@ -2,37 +2,36 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+Statement* statement(Parser* parser);
+Statement* print_statement(Parser* parser);
+Statement* expression_statement(Parser* parser);
+Statement* new_statement(StatementType type, Expr* expr);
+
 Expr* expression(Parser* parser);
-
 Expr* equality(Parser* parser);
-
 Expr* comparison(Parser* parser);
-
 Expr* term(Parser* parser);
-
 Expr* factor(Parser* parser);
-
 Expr* unary(Parser* parser);
-
 Expr* primary(Parser* parser);
 
 static Token* advance(Parser* parser);
-
 static Token* peek(Parser* parser);
-
 static Token* previous(Parser* parser);
-
 static Token* consume(Parser* parser, TokenType type, char* message);
 
 static void error(Token* token, char* message);
-
 static void synchronize(Parser* parser);
 
 static bool match(Parser* parser, TokenType* types, int size);
-
 static bool check(Parser* parser, TokenType type);
-
 static bool is_at_end(Parser* parser);
+
+Expr* new_expr(UnTaggedExpr* u_expr, ExprType type);
+Expr* new_binary(Expr* left, Token* op, Expr* right);
+Expr* new_unary(Token* op, Expr* right);
+Expr* new_literal(Token* value);
+Expr* new_grouping(Expr* expression);
 
 Parser* new_parser(Token** tokens, int num_tokens) {
   Parser* parser = (Parser*)malloc(sizeof(Token*) * num_tokens + sizeof(int));
@@ -83,8 +82,43 @@ Expr* new_grouping(Expr* expression) {
   return new_expr(u_expr, E_Grouping);
 };
 
-Expr* parse(Parser* parser) {
-  return expression(parser);
+Statement** parse(Parser* parser) {
+  Statement** stmts = malloc(sizeof(Statement) * 0 + sizeof(NULL));
+  int i = 0;
+  while (!is_at_end(parser)) {
+    stmts = realloc(stmts, sizeof(Statement) * i + sizeof(NULL));
+    stmts[i] = statement(parser);
+    i++;
+  }
+  // add NULL at end for loop stop flag.
+  stmts[i] = NULL;
+  return stmts;
+};
+
+Statement* new_statement(StatementType type, Expr* expr) {
+  Statement* stmt = malloc(sizeof(Statement));
+  stmt->type = type;
+  stmt->expr = expr;
+  return stmt;
+}
+
+Statement* statement(Parser* parser) {
+  TokenType types[] = {PRINT};
+  if (match(parser, types, 1))
+    return print_statement(parser);
+  return expression_statement(parser);
+};
+
+Statement* print_statement(Parser* parser) {
+  Expr* expr = expression(parser);
+  consume(parser, SEMICOLON, "Expect ';' after value.");
+  return new_statement(STATEMENT_PRINT, expr);
+};
+
+Statement* expression_statement(Parser* parser) {
+  Expr* expr = expression(parser);
+  consume(parser, SEMICOLON, "Expect ';' after expression.");
+  return new_statement(STATEMENT_EXPRESSION, expr);
 };
 
 Expr* expression(Parser* parser) {
@@ -251,8 +285,11 @@ void print_grouping(Expr* expr);
 void print_literal(Expr* expr);
 void print_parenthesize(char* name, Expr** exprs, int size);
 
-void print_ast(Expr* expr) {
-  print_expr(expr);
+void print_ast(Statement** statements) {
+  for (int i = 0; statements[i] != NULL; i++) {
+    Statement* stmt = statements[i];
+    print_expr(stmt->expr);
+  }
 }
 
 void print_expr(Expr* expr) {
