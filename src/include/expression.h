@@ -17,13 +17,20 @@
                                 | "+"  | "-"  | "*" | "/" ;
 */
 
-typedef enum ExprType { E_Binary, E_Unary, E_Grouping, E_Literal } ExprType;
+typedef enum ExprType {
+  E_Binary,
+  E_Unary,
+  E_Grouping,
+  E_Literal,
+  E_Variable
+} ExprType;
 
 typedef union UnTaggedExpr {
   struct ExprBinary* binary;
   struct ExprUnary* unary;
   struct ExprLiteral* literal;
   struct ExprGrouping* grouping;
+  struct ExprVariable* variable;
 } UnTaggedExpr;
 
 typedef struct Expr {
@@ -35,6 +42,10 @@ typedef struct ExprUnary {
   Token* op;
   struct Expr* right;
 } ExprUnary;
+
+typedef struct ExprVariable {
+  Token* name;
+} ExprVariable;
 
 typedef struct ExprGrouping {
   struct Expr* expression;
@@ -64,6 +75,7 @@ typedef enum StatementType {
 typedef struct {
   StatementType type;
   Expr* expr;
+  Token* name;
 } Statement;
 
 #endif

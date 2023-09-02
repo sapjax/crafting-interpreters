@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include "expression.h"
+#include "hashtable.h"
 
 typedef union Value {
   char* string;
@@ -23,23 +24,25 @@ typedef struct {
   Value* value;
 } Object;
 
+typedef hash_table Env;
+
 Value* new_value();
 
 Object* new_object();
 
 void interpret(Statement* statements[]);
 
-void execute(Statement* statement);
+void execute(Statement* statement, Env* env);
 
-Object* evaluate(Expr* expr);
+Object* evaluate(Expr* expr, Env* env);
 
-Object* eval_literal(Expr* expr);
+Object* eval_literal(Expr* expr, Env* env);
 
-Object* eval_unary(Expr* expr);
+Object* eval_unary(Expr* expr, Env* env);
 
-Object* eval_grouping(Expr* expr);
+Object* eval_grouping(Expr* expr, Env* env);
 
-Object* eval_binary(Expr* expr);
+Object* eval_binary(Expr* expr, Env* env);
 
 bool is_truthy(Object* obj);
 

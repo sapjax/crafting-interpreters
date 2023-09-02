@@ -18,48 +18,57 @@ Object* new_object() {
 };
 
 void interpret(Statement** statements) {
+  Env* env = hash_table_create(8192, NULL);
   for (int i = 0; statements[i] != NULL; i++) {
     Statement* stmt = statements[i];
-    execute(stmt);
+    execute(stmt, env);
   }
   free(statements);
+  hash_table_destroy(env);
 };
 
-void execute(Statement* statement) {
+void execute(Statement* statement, Env* env) {
   switch (statement->type) {
     case STATEMENT_EXPRESSION: {
-      Object* obj = evaluate(statement->expr);
+      Object* obj = evaluate(statement->expr, env);
       free(obj);
       break;
     }
     case STATEMENT_PRINT: {
-      Object* obj = evaluate(statement->expr);
+      Object* obj = evaluate(statement->expr, env);
       char* str = stringify(obj);
       log_info("%s\n", str);
       free(obj);
       break;
     }
+    case STATEMENT_VAR: {
+      if (statement->expr != NULL) {
+        Object* obj = evaluate(statement->expr, env);
+        hash_table_insert(env, statement->name->lexeme, obj);
+      }
+      break;
+    }
     default:
       break;
   }
 };
 
-Object* evaluate(Expr* expr) {
+Object* evaluate(Expr* expr, Env* env) {
   switch (expr->type) {
     case E_Literal:
-      return eval_literal(expr);
+      return eval_literal(expr, env);
     case E_Unary:
-      return eval_unary(expr);
+      return eval_unary(expr, env);
     case E_Grouping:
-      return eval_grouping(expr);
+      return eval_grouping(expr, env);
     case E_Binary:
-      return eval_binary(expr);
+      return eval_binary(expr, env);
     default:
       return new_object();
   }
 };
 
-Object* eval_literal(Expr* expr) {
+Object* eval_literal(Expr* expr, Env* env) {
   Token* token = expr->u_expr->literal->value;
   Literal* literal = token->literal;
   Object* obj = new_object();
@@ -72,13 +81,17 @@ Object* eval_literal(Expr* expr) {
       obj->type = V_NUMBER;
       obj->value->number = literal->number;
       return obj;
+    case IDENTIFIER:
+      free(obj);
+      obj = hash_table_lookup(env, literal->identifier);
+      return obj;
     default:
       return obj;
   };
 };
 
-Object* eval_unary(Expr* expr) {
-  Object* right = evaluate(expr->u_expr->unary->right);
+Object* eval_unary(Expr* expr, Env* env) {
+  Object* right = evaluate(expr->u_expr->unary->right, env);
   Object* obj = new_object();
 
   switch (expr->u_expr->unary->op->type) {
@@ -97,13 +110,13 @@ Object* eval_unary(Expr* expr) {
   return obj;
 };
 
-Object* eval_grouping(Expr* expr) {
-  return evaluate(expr->u_expr->grouping->expression);
+Object* eval_grouping(Expr* expr, Env* env) {
+  return evaluate(expr->u_expr->grouping->expression, env);
 };
 
-Object* eval_binary(Expr* expr) {
-  Object* left = evaluate(expr->u_expr->binary->left);
-  Object* right = evaluate(expr->u_expr->binary->right);
+Object* eval_binary(Expr* expr, Env* env) {
+  Object* left = evaluate(expr->u_expr->binary->left, env);
+  Object* right = evaluate(expr->u_expr->binary->right, env);
   Object* obj = new_object();
   switch (expr->u_expr->binary->op->type) {
     case GREATER:

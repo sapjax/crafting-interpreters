@@ -5,7 +5,10 @@
 Statement* statement(Parser* parser);
 Statement* print_statement(Parser* parser);
 Statement* expression_statement(Parser* parser);
-Statement* new_statement(StatementType type, Expr* expr);
+Statement* new_statement(StatementType type, Expr* expr, Token* name);
+
+Statement* declaration(Parser* parser);
+Statement* var_declaration(Parser* parser);
 
 Expr* expression(Parser* parser);
 Expr* equality(Parser* parser);
@@ -23,7 +26,7 @@ static Token* consume(Parser* parser, TokenType type, char* message);
 static void error(Token* token, char* message);
 static void synchronize(Parser* parser);
 
-static bool match(Parser* parser, TokenType* types, int size);
+static bool match(Parser* parser, TokenType* types);
 static bool check(Parser* parser, TokenType type);
 static bool is_at_end(Parser* parser);
 
@@ -32,6 +35,7 @@ Expr* new_binary(Expr* left, Token* op, Expr* right);
 Expr* new_unary(Token* op, Expr* right);
 Expr* new_literal(Token* value);
 Expr* new_grouping(Expr* expression);
+Expr* new_variable(Token* value);
 
 Parser* new_parser(Token** tokens, int num_tokens) {
   Parser* parser = (Parser*)malloc(sizeof(Token*) * num_tokens + sizeof(int));
@@ -47,12 +51,17 @@ Expr* new_expr(UnTaggedExpr* u_expr, ExprType type) {
   return expr;
 };
 
+UnTaggedExpr* new_untagged_expr() {
+  UnTaggedExpr* u_expr = (UnTaggedExpr*)malloc(sizeof(UnTaggedExpr));
+  return u_expr;
+}
+
 Expr* new_binary(Expr* left, Token* op, Expr* right) {
   ExprBinary* binary = malloc(sizeof(ExprBinary));
   binary->left = left;
   binary->op = op;
   binary->right = right;
-  UnTaggedExpr* u_expr = (UnTaggedExpr*)malloc(sizeof(UnTaggedExpr));
+  UnTaggedExpr* u_expr = new_untagged_expr();
   u_expr->binary = binary;
   return new_expr(u_expr, E_Binary);
 };
@@ -61,7 +70,7 @@ Expr* new_unary(Token* op, Expr* right) {
   ExprUnary* unary = malloc(sizeof(ExprUnary));
   unary->op = op;
   unary->right = right;
-  UnTaggedExpr* u_expr = (UnTaggedExpr*)malloc(sizeof(UnTaggedExpr));
+  UnTaggedExpr* u_expr = new_untagged_expr();
   u_expr->unary = unary;
   return new_expr(u_expr, E_Unary);
 };
@@ -69,7 +78,7 @@ Expr* new_unary(Token* op, Expr* right) {
 Expr* new_literal(Token* value) {
   ExprLiteral* literal = malloc(sizeof(ExprLiteral));
   literal->value = value;
-  UnTaggedExpr* u_expr = (UnTaggedExpr*)malloc(sizeof(UnTaggedExpr));
+  UnTaggedExpr* u_expr = new_untagged_expr();
   u_expr->literal = literal;
   return new_expr(u_expr, E_Literal);
 };
@@ -77,9 +86,17 @@ Expr* new_literal(Token* value) {
 Expr* new_grouping(Expr* expression) {
   ExprGrouping* grouping = malloc(sizeof(ExprGrouping));
   grouping->expression = expression;
-  UnTaggedExpr* u_expr = (UnTaggedExpr*)malloc(sizeof(UnTaggedExpr));
+  UnTaggedExpr* u_expr = new_untagged_expr();
   u_expr->grouping = grouping;
   return new_expr(u_expr, E_Grouping);
+};
+
+Expr* new_variable(Token* name) {
+  ExprVariable* variable = malloc(sizeof(ExprVariable));
+  variable->name = name;
+  UnTaggedExpr* u_expr = new_untagged_expr();
+  u_expr->variable = variable;
+  return new_expr(u_expr, E_Variable);
 };
 
 Statement** parse(Parser* parser) {
@@ -87,7 +104,7 @@ Statement** parse(Parser* parser) {
   int i = 0;
   while (!is_at_end(parser)) {
     stmts = realloc(stmts, sizeof(Statement) * i + sizeof(NULL));
-    stmts[i] = statement(parser);
+    stmts[i] = declaration(parser);
     i++;
   }
   // add NULL at end for loop stop flag.
@@ -95,16 +112,32 @@ Statement** parse(Parser* parser) {
   return stmts;
 };
 
-Statement* new_statement(StatementType type, Expr* expr) {
+Statement* declaration(Parser* parser) {
+  if (match(parser, (TokenType[]){VAR, -1}))
+    return var_declaration(parser);
+  return statement(parser);
+};
+
+Statement* var_declaration(Parser* parser) {
+  Token* name = consume(parser, IDENTIFIER, "Expect variable name.");
+  Expr* initializer = NULL;
+  if (match(parser, (TokenType[]){EQUAL, -1})) {
+    initializer = expression(parser);
+  }
+  consume(parser, SEMICOLON, "Expect ';' after variable declaration.");
+  return new_statement(STATEMENT_VAR, initializer, name);
+};
+
+Statement* new_statement(StatementType type, Expr* expr, Token* name) {
   Statement* stmt = malloc(sizeof(Statement));
   stmt->type = type;
   stmt->expr = expr;
+  stmt->name = name;
   return stmt;
-}
+};
 
 Statement* statement(Parser* parser) {
-  TokenType types[] = {PRINT};
-  if (match(parser, types, 1))
+  if (match(parser, (TokenType[]){PRINT, -1}))
     return print_statement(parser);
   return expression_statement(parser);
 };
@@ -112,13 +145,13 @@ Statement* statement(Parser* parser) {
 Statement* print_statement(Parser* parser) {
   Expr* expr = expression(parser);
   consume(parser, SEMICOLON, "Expect ';' after value.");
-  return new_statement(STATEMENT_PRINT, expr);
+  return new_statement(STATEMENT_PRINT, expr, NULL);
 };
 
 Statement* expression_statement(Parser* parser) {
   Expr* expr = expression(parser);
   consume(parser, SEMICOLON, "Expect ';' after expression.");
-  return new_statement(STATEMENT_EXPRESSION, expr);
+  return new_statement(STATEMENT_EXPRESSION, expr, NULL);
 };
 
 Expr* expression(Parser* parser) {
@@ -127,8 +160,7 @@ Expr* expression(Parser* parser) {
 
 Expr* equality(Parser* parser) {
   Expr* expr = comparison(parser);
-  TokenType types[] = {BANG_EQUAL, EQUAL_EQUAL};
-  while (match(parser, types, 2)) {
+  while (match(parser, (TokenType[]){BANG_EQUAL, EQUAL_EQUAL, -1})) {
     Token* op = previous(parser);
     Expr* right = comparison(parser);
     Expr* binary = new_binary(expr, op, right);
@@ -139,8 +171,8 @@ Expr* equality(Parser* parser) {
 
 Expr* comparison(Parser* parser) {
   Expr* expr = term(parser);
-  TokenType types[] = {GREATER, GREATER_EQUAL, LESS, LESS_EQUAL};
-  while (match(parser, types, 4)) {
+  while (match(parser,
+               (TokenType[]){GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, -1})) {
     Token* op = previous((parser));
     Expr* right = term(parser);
     Expr* binary = new_binary(expr, op, right);
@@ -151,8 +183,7 @@ Expr* comparison(Parser* parser) {
 
 Expr* term(Parser* parser) {
   Expr* expr = factor(parser);
-  TokenType types[] = {MINUS, PLUS};
-  while (match(parser, types, 2)) {
+  while (match(parser, (TokenType[]){MINUS, PLUS, -1})) {
     Token* op = previous((parser));
     Expr* right = factor(parser);
     Expr* binary = new_binary(expr, op, right);
@@ -163,8 +194,7 @@ Expr* term(Parser* parser) {
 
 Expr* factor(Parser* parser) {
   Expr* expr = unary(parser);
-  TokenType types[] = {SLASH, STAR};
-  while (match(parser, types, 2)) {
+  while (match(parser, (TokenType[]){SLASH, STAR, -1})) {
     Token* op = previous((parser));
     Expr* right = unary(parser);
     Expr* binary = new_binary(expr, op, right);
@@ -174,8 +204,7 @@ Expr* factor(Parser* parser) {
 };
 
 Expr* unary(Parser* parser) {
-  TokenType types[] = {BANG, MINUS};
-  if (match(parser, types, 2)) {
+  if (match(parser, (TokenType[]){BANG, MINUS, -1})) {
     Token* op = previous(parser);
     Expr* right = unary(parser);
     return new_unary(op, right);
@@ -184,13 +213,16 @@ Expr* unary(Parser* parser) {
 };
 
 Expr* primary(Parser* parser) {
-  TokenType types_literal[] = {FALSE, TRUE, NIL, STRING, NUMBER};
-  if (match(parser, types_literal, 5)) {
+  if (match(parser, (TokenType[]){FALSE, TRUE, NIL, STRING, NUMBER, -1})) {
     return new_literal(previous(parser));
   }
+
+  if (match(parser, (TokenType[]){IDENTIFIER})) {
+    return new_variable(previous(parser));
+  }
+
   // matched group
-  TokenType types_group_start[] = {LEFT_PAREN};
-  if (match(parser, types_group_start, 1)) {
+  if (match(parser, (TokenType[]){LEFT_PAREN, -1})) {
     Expr* expr = expression(parser);
     consume(parser, RIGHT_PAREN, "Expect ')' after expression.");
     return new_grouping(expr);
@@ -264,11 +296,11 @@ void synchronize(Parser* parser) {
   }
 };
 
-bool match(Parser* parser, TokenType* types, int size) {
+bool match(Parser* parser, TokenType* types) {
   if (is_at_end((parser))) {
     return false;
   }
-  for (int i = 0; i < size; i++) {
+  for (int i = 0; types[i] != -1; i++) {
     if (check(parser, types[i])) {
       advance(parser);
       return true;
