@@ -11,6 +11,7 @@ Statement* declaration(Parser* parser);
 Statement* var_declaration(Parser* parser);
 
 Expr* expression(Parser* parser);
+Expr* assignment(Parser* parser);
 Expr* equality(Parser* parser);
 Expr* comparison(Parser* parser);
 Expr* term(Parser* parser);
@@ -26,7 +27,8 @@ static Token* consume(Parser* parser, TokenType type, char* message);
 static void error(Token* token, char* message);
 static void synchronize(Parser* parser);
 
-static bool match(Parser* parser, TokenType* types);
+static bool match(Parser* parser, TokenType type);
+static bool match_any(Parser* parser, TokenType* types);
 static bool check(Parser* parser, TokenType type);
 static bool is_at_end(Parser* parser);
 
@@ -36,6 +38,7 @@ Expr* new_unary(Token* op, Expr* right);
 Expr* new_literal(Token* value);
 Expr* new_grouping(Expr* expression);
 Expr* new_variable(Token* value);
+Expr* new_assign(Token* name, Expr* value);
 
 Parser* new_parser(Token** tokens, int num_tokens) {
   Parser* parser = (Parser*)malloc(sizeof(Token*) * num_tokens + sizeof(int));
@@ -99,6 +102,15 @@ Expr* new_variable(Token* name) {
   return new_expr(u_expr, E_Variable);
 };
 
+Expr* new_assign(Token* name, Expr* value) {
+  ExprAssign* assign = malloc(sizeof(ExprAssign));
+  assign->name = name;
+  assign->value = value;
+  UnTaggedExpr* u_expr = new_untagged_expr();
+  u_expr->assign = assign;
+  return new_expr(u_expr, E_Assign);
+};
+
 Statement** parse(Parser* parser) {
   Statement** stmts = malloc(sizeof(Statement) * 0 + sizeof(NULL));
   int i = 0;
@@ -113,7 +125,7 @@ Statement** parse(Parser* parser) {
 };
 
 Statement* declaration(Parser* parser) {
-  if (match(parser, (TokenType[]){VAR, -1}))
+  if (match(parser, VAR))
     return var_declaration(parser);
   return statement(parser);
 };
@@ -121,7 +133,7 @@ Statement* declaration(Parser* parser) {
 Statement* var_declaration(Parser* parser) {
   Token* name = consume(parser, IDENTIFIER, "Expect variable name.");
   Expr* initializer = NULL;
-  if (match(parser, (TokenType[]){EQUAL, -1})) {
+  if (match(parser, EQUAL)) {
     initializer = expression(parser);
   }
   consume(parser, SEMICOLON, "Expect ';' after variable declaration.");
@@ -137,7 +149,7 @@ Statement* new_statement(StatementType type, Expr* expr, Token* name) {
 };
 
 Statement* statement(Parser* parser) {
-  if (match(parser, (TokenType[]){PRINT, -1}))
+  if (match(parser, PRINT))
     return print_statement(parser);
   return expression_statement(parser);
 };
@@ -155,12 +167,29 @@ Statement* expression_statement(Parser* parser) {
 };
 
 Expr* expression(Parser* parser) {
-  return equality(parser);
+  return assignment(parser);
 };
+
+Expr* assignment(Parser* parser) {
+  Expr* expr = equality(parser);
+  if (match(parser, EQUAL)) {
+    Token* equals = previous(parser);
+    Expr* value = assignment(parser);
+
+    if (expr->type == E_Variable) {
+      Token* name = expr->u_expr->variable->name;
+      return new_assign(name, value);
+    }
+
+    free(value);
+    error(equals, "Invalid assignment target.");
+  }
+  return expr;
+}
 
 Expr* equality(Parser* parser) {
   Expr* expr = comparison(parser);
-  while (match(parser, (TokenType[]){BANG_EQUAL, EQUAL_EQUAL, -1})) {
+  while (match_any(parser, (TokenType[]){BANG_EQUAL, EQUAL_EQUAL, -1})) {
     Token* op = previous(parser);
     Expr* right = comparison(parser);
     Expr* binary = new_binary(expr, op, right);
@@ -171,8 +200,8 @@ Expr* equality(Parser* parser) {
 
 Expr* comparison(Parser* parser) {
   Expr* expr = term(parser);
-  while (match(parser,
-               (TokenType[]){GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, -1})) {
+  while (match_any(
+      parser, (TokenType[]){GREATER, GREATER_EQUAL, LESS, LESS_EQUAL, -1})) {
     Token* op = previous((parser));
     Expr* right = term(parser);
     Expr* binary = new_binary(expr, op, right);
@@ -183,7 +212,7 @@ Expr* comparison(Parser* parser) {
 
 Expr* term(Parser* parser) {
   Expr* expr = factor(parser);
-  while (match(parser, (TokenType[]){MINUS, PLUS, -1})) {
+  while (match_any(parser, (TokenType[]){MINUS, PLUS, -1})) {
     Token* op = previous((parser));
     Expr* right = factor(parser);
     Expr* binary = new_binary(expr, op, right);
@@ -194,7 +223,7 @@ Expr* term(Parser* parser) {
 
 Expr* factor(Parser* parser) {
   Expr* expr = unary(parser);
-  while (match(parser, (TokenType[]){SLASH, STAR, -1})) {
+  while (match_any(parser, (TokenType[]){SLASH, STAR, -1})) {
     Token* op = previous((parser));
     Expr* right = unary(parser);
     Expr* binary = new_binary(expr, op, right);
@@ -204,7 +233,7 @@ Expr* factor(Parser* parser) {
 };
 
 Expr* unary(Parser* parser) {
-  if (match(parser, (TokenType[]){BANG, MINUS, -1})) {
+  if (match_any(parser, (TokenType[]){BANG, MINUS, -1})) {
     Token* op = previous(parser);
     Expr* right = unary(parser);
     return new_unary(op, right);
@@ -213,16 +242,16 @@ Expr* unary(Parser* parser) {
 };
 
 Expr* primary(Parser* parser) {
-  if (match(parser, (TokenType[]){FALSE, TRUE, NIL, STRING, NUMBER, -1})) {
+  if (match_any(parser, (TokenType[]){FALSE, TRUE, NIL, STRING, NUMBER, -1})) {
     return new_literal(previous(parser));
   }
 
-  if (match(parser, (TokenType[]){IDENTIFIER})) {
+  if (match(parser, IDENTIFIER)) {
     return new_variable(previous(parser));
   }
 
   // matched group
-  if (match(parser, (TokenType[]){LEFT_PAREN, -1})) {
+  if (match(parser, LEFT_PAREN)) {
     Expr* expr = expression(parser);
     consume(parser, RIGHT_PAREN, "Expect ')' after expression.");
     return new_grouping(expr);
@@ -296,7 +325,18 @@ void synchronize(Parser* parser) {
   }
 };
 
-bool match(Parser* parser, TokenType* types) {
+bool match(Parser* parser, TokenType type) {
+  if (is_at_end((parser))) {
+    return false;
+  }
+  if (check(parser, type)) {
+    advance(parser);
+    return true;
+  }
+  return false;
+};
+
+bool match_any(Parser* parser, TokenType* types) {
   if (is_at_end((parser))) {
     return false;
   }

@@ -95,6 +95,21 @@ bool hash_table_insert(hash_table* ht, const char* key, void* obj) {
   return true;
 };
 
+bool hash_table_update(hash_table* ht, const char* key, void* obj) {
+  if (key == NULL || obj == NULL || ht == NULL)
+    return false;
+  size_t index = hash_table_index(ht, key);
+
+  entry* tmp = ht->elements[index];
+  while (tmp != NULL && strcmp(tmp->key, key) != 0) {
+    tmp = tmp->next;
+  }
+  if (tmp == NULL)
+    return false;
+  tmp->object = obj;
+  return true;
+};
+
 void* hash_table_lookup(hash_table* ht, const char* key) {
   if (key == NULL || ht == NULL)
     return false;

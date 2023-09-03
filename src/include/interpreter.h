@@ -44,6 +44,8 @@ Object* eval_grouping(Expr* expr, Env* env);
 
 Object* eval_binary(Expr* expr, Env* env);
 
+Object* eval_assign(Expr* expr, Env* env);
+
 bool is_truthy(Object* obj);
 
 void check_number_operand(Token* op, Object* left, Object* right);

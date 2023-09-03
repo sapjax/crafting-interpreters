@@ -22,7 +22,8 @@ typedef enum ExprType {
   E_Unary,
   E_Grouping,
   E_Literal,
-  E_Variable
+  E_Variable,
+  E_Assign
 } ExprType;
 
 typedef union UnTaggedExpr {
@@ -31,6 +32,7 @@ typedef union UnTaggedExpr {
   struct ExprLiteral* literal;
   struct ExprGrouping* grouping;
   struct ExprVariable* variable;
+  struct ExprAssign* assign;
 } UnTaggedExpr;
 
 typedef struct Expr {
@@ -60,6 +62,11 @@ typedef struct ExprBinary {
   Token* op;
   struct Expr* right;
 } ExprBinary;
+
+typedef struct ExprAssign {
+  Token* name;
+  struct Expr* value;
+} ExprAssign;
 
 typedef enum StatementType {
   STATEMENT_EXPRESSION,

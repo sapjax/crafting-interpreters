@@ -63,6 +63,8 @@ Object* evaluate(Expr* expr, Env* env) {
       return eval_grouping(expr, env);
     case E_Binary:
       return eval_binary(expr, env);
+    case E_Assign:
+      return eval_assign(expr, env);
     default:
       return new_object();
   }
@@ -185,6 +187,16 @@ Object* eval_binary(Expr* expr, Env* env) {
   free(left);
   free(right);
   return obj;
+};
+
+Object* eval_assign(Expr* expr, Env* env) {
+  Object* value = evaluate(expr->u_expr->assign->value, env);
+  bool updated =
+      hash_table_update(env, expr->u_expr->assign->name->lexeme, value);
+  if (!updated) {
+    log_error("Undefined variable '%s'.", expr->u_expr->assign->name->lexeme);
+  }
+  return value;
 };
 
 void check_number_operand(Token* op, Object* left, Object* right) {
