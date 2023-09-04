@@ -24,7 +24,17 @@ typedef struct {
   Value* value;
 } Object;
 
-typedef hash_table Env;
+typedef struct Env {
+  struct Env* enclosing;
+  hash_table* map;
+} Env;
+
+Env* new_env(Env* enclosing);
+
+Object* env_define(Env* env, char* identifier, Object* value);
+Object* env_update(Env* env, char* identifier, Object* value);
+Object* env_lookup(Env* env, char* identifier);
+void env_free(Env* env);
 
 Value* new_value();
 
@@ -36,6 +46,8 @@ void execute(Statement* statement, Env* env);
 
 Object* evaluate(Expr* expr, Env* env);
 
+Object* eval_variable(Expr* expr, Env* env);
+
 Object* eval_literal(Expr* expr, Env* env);
 
 Object* eval_unary(Expr* expr, Env* env);
@@ -45,6 +57,8 @@ Object* eval_grouping(Expr* expr, Env* env);
 Object* eval_binary(Expr* expr, Env* env);
 
 Object* eval_assign(Expr* expr, Env* env);
+
+void eval_block(Statement* stmt, Env* env);
 
 bool is_truthy(Object* obj);
 

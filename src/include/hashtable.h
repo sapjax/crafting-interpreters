@@ -14,5 +14,5 @@ void hash_table_print(hash_table* ht);
 bool hash_table_insert(hash_table* ht, const char* key, void* obj);
 bool hash_table_update(hash_table* ht, const char* key, void* obj);
 void* hash_table_lookup(hash_table* ht, const char* key);
-void* hash_table_delete(hash_table* ht, const char* key);
+bool hash_table_delete(hash_table* ht, const char* key);
 #endif  //!__HASHTABLE__H__

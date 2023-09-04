@@ -3,12 +3,16 @@
 #include <stdlib.h>
 
 Statement* statement(Parser* parser);
-Statement* print_statement(Parser* parser);
-Statement* expression_statement(Parser* parser);
-Statement* new_statement(StatementType type, Expr* expr, Token* name);
+Statement* statement_print(Parser* parser);
+Statement* statement_expression(Parser* parser);
+Statement* statement_block(Parser* parser);
+Statement* statement_var(Parser* parser);
+Statement* new_statement(StatementType type,
+                         Expr* expr,
+                         Token* name,
+                         Statement** block_stmts);
 
 Statement* declaration(Parser* parser);
-Statement* var_declaration(Parser* parser);
 
 Expr* expression(Parser* parser);
 Expr* assignment(Parser* parser);
@@ -112,10 +116,10 @@ Expr* new_assign(Token* name, Expr* value) {
 };
 
 Statement** parse(Parser* parser) {
-  Statement** stmts = malloc(sizeof(Statement) * 0 + sizeof(NULL));
+  Statement** stmts = malloc(sizeof(Statement*) * 0 + sizeof(NULL));
   int i = 0;
   while (!is_at_end(parser)) {
-    stmts = realloc(stmts, sizeof(Statement) * i + sizeof(NULL));
+    stmts = realloc(stmts, sizeof(Statement*) * (i + 1) + sizeof(NULL));
     stmts[i] = declaration(parser);
     i++;
   }
@@ -126,44 +130,63 @@ Statement** parse(Parser* parser) {
 
 Statement* declaration(Parser* parser) {
   if (match(parser, VAR))
-    return var_declaration(parser);
+    return statement_var(parser);
   return statement(parser);
 };
 
-Statement* var_declaration(Parser* parser) {
+Statement* new_statement(StatementType type,
+                         Expr* expr,
+                         Token* name,
+                         Statement** block_stmts) {
+  Statement* stmt = malloc(sizeof(Statement));
+  stmt->type = type;
+  stmt->expr = expr;
+  stmt->name = name;
+  stmt->block_stmts = block_stmts;
+  return stmt;
+};
+
+Statement* statement(Parser* parser) {
+  if (match(parser, PRINT))
+    return statement_print(parser);
+  if (match(parser, LEFT_BRACE))
+    return statement_block(parser);
+  return statement_expression(parser);
+};
+
+Statement* statement_var(Parser* parser) {
   Token* name = consume(parser, IDENTIFIER, "Expect variable name.");
   Expr* initializer = NULL;
   if (match(parser, EQUAL)) {
     initializer = expression(parser);
   }
   consume(parser, SEMICOLON, "Expect ';' after variable declaration.");
-  return new_statement(STATEMENT_VAR, initializer, name);
+  return new_statement(STATEMENT_VAR, initializer, name, NULL);
 };
 
-Statement* new_statement(StatementType type, Expr* expr, Token* name) {
-  Statement* stmt = malloc(sizeof(Statement));
-  stmt->type = type;
-  stmt->expr = expr;
-  stmt->name = name;
-  return stmt;
-};
-
-Statement* statement(Parser* parser) {
-  if (match(parser, PRINT))
-    return print_statement(parser);
-  return expression_statement(parser);
-};
-
-Statement* print_statement(Parser* parser) {
+Statement* statement_print(Parser* parser) {
   Expr* expr = expression(parser);
   consume(parser, SEMICOLON, "Expect ';' after value.");
-  return new_statement(STATEMENT_PRINT, expr, NULL);
+  return new_statement(STATEMENT_PRINT, expr, NULL, NULL);
 };
 
-Statement* expression_statement(Parser* parser) {
+Statement* statement_expression(Parser* parser) {
   Expr* expr = expression(parser);
   consume(parser, SEMICOLON, "Expect ';' after expression.");
-  return new_statement(STATEMENT_EXPRESSION, expr, NULL);
+  return new_statement(STATEMENT_EXPRESSION, expr, NULL, NULL);
+};
+
+Statement* statement_block(Parser* parser) {
+  Statement** stmts = calloc(1, sizeof(Statement*) + sizeof(NULL));
+  int i = 0;
+  while (!check(parser, RIGHT_BRACE) && !is_at_end(parser)) {
+    stmts = realloc(stmts, sizeof(Statement*) * (i + 1) + sizeof(NULL));
+    stmts[i] = declaration(parser);
+    i++;
+  }
+  stmts[i] = NULL;
+  consume(parser, RIGHT_BRACE, "Expect '}' after block.");
+  return new_statement(STATEMENT_BLOCK, NULL, NULL, stmts);
 };
 
 Expr* expression(Parser* parser) {
@@ -340,7 +363,7 @@ bool match_any(Parser* parser, TokenType* types) {
   if (is_at_end((parser))) {
     return false;
   }
-  for (int i = 0; types[i] != -1; i++) {
+  for (int i = 0; types[i] != (TokenType)-1; i++) {
     if (check(parser, types[i])) {
       advance(parser);
       return true;

@@ -4,53 +4,108 @@
 #include <string.h>
 #include "include/log.h"
 
+Env* new_env(Env* enclosing) {
+  Env* env = malloc(sizeof(*env));
+  env->enclosing = enclosing;
+  env->map = hash_table_create(8192, NULL);
+  return env;
+};
+
+Object* env_define(Env* env, char* identifier, Object* obj) {
+  hash_table_insert(env->map, identifier, obj);
+  return obj;
+};
+
+Object* env_update(Env* env, char* identifier, Object* obj) {
+  bool updated = hash_table_update(env->map, identifier, obj);
+  if (!updated) {
+    if (env->enclosing != NULL) {
+      return env_update(env->enclosing, identifier, obj);
+    } else {
+      log_error("Undefined variable '%s'.", identifier);
+    }
+  }
+  return obj;
+};
+
+Object* env_lookup(Env* env, char* identifier) {
+  Object* obj = hash_table_lookup(env->map, identifier);
+  if (obj == NULL) {
+    if (env->enclosing != NULL) {
+      return env_lookup(env->enclosing, identifier);
+    } else {
+      log_error("Undefined variable '%s'.", identifier);
+    }
+  }
+  return obj;
+};
+
+void env_free(Env* env) {
+  hash_table_destroy(env->map);
+  free(env);
+};
+
 Value* new_value() {
-  Value* v = malloc(sizeof(Value));
+  Value* v = malloc(sizeof(*v));
+  v->number = 0;
   v->nil = true;
   return v;
-}
+};
 
 Object* new_object() {
-  Object* obj = malloc(sizeof(Object));
+  Object* obj = malloc(sizeof(*obj));
   obj->type = V_NIL;
   obj->value = new_value();
   return obj;
 };
 
 void interpret(Statement** statements) {
-  Env* env = hash_table_create(8192, NULL);
+  Env* env = new_env(NULL);
   for (int i = 0; statements[i] != NULL; i++) {
     Statement* stmt = statements[i];
     execute(stmt, env);
   }
   free(statements);
-  hash_table_destroy(env);
+  env_free(env);
+  // TODO: need to free Object* obj
 };
 
 void execute(Statement* statement, Env* env) {
   switch (statement->type) {
     case STATEMENT_EXPRESSION: {
-      Object* obj = evaluate(statement->expr, env);
-      free(obj);
+      evaluate(statement->expr, env);
       break;
     }
     case STATEMENT_PRINT: {
       Object* obj = evaluate(statement->expr, env);
       char* str = stringify(obj);
       log_info("%s\n", str);
-      free(obj);
+      // free(obj);
       break;
     }
     case STATEMENT_VAR: {
       if (statement->expr != NULL) {
         Object* obj = evaluate(statement->expr, env);
-        hash_table_insert(env, statement->name->lexeme, obj);
+        env_define(env, statement->name->lexeme, obj);
       }
+      break;
+    }
+    case STATEMENT_BLOCK: {
+      Env* block_env = new_env(env);
+      eval_block(statement, block_env);
       break;
     }
     default:
       break;
   }
+};
+
+void eval_block(Statement* stmt, Env* env) {
+  for (int i = 0; stmt->block_stmts[i] != NULL; i++) {
+    Statement* statement = stmt->block_stmts[i];
+    execute(statement, env);
+  }
+  env_free(env);
 };
 
 Object* evaluate(Expr* expr, Env* env) {
@@ -63,11 +118,17 @@ Object* evaluate(Expr* expr, Env* env) {
       return eval_grouping(expr, env);
     case E_Binary:
       return eval_binary(expr, env);
+    case E_Variable:
+      return eval_variable(expr, env);
     case E_Assign:
       return eval_assign(expr, env);
     default:
       return new_object();
   }
+};
+
+Object* eval_variable(Expr* expr, Env* env) {
+  return env_lookup(env, expr->u_expr->variable->name->lexeme);
 };
 
 Object* eval_literal(Expr* expr, Env* env) {
@@ -77,7 +138,8 @@ Object* eval_literal(Expr* expr, Env* env) {
   switch (token->type) {
     case STRING:
       obj->type = V_STRING;
-      obj->value->string = literal->string;
+      obj->value->string = (char*)malloc(strlen(literal->string) + 1);
+      strcpy(obj->value->string, literal->string);
       return obj;
     case NUMBER:
       obj->type = V_NUMBER;
@@ -85,8 +147,7 @@ Object* eval_literal(Expr* expr, Env* env) {
       return obj;
     case IDENTIFIER:
       free(obj);
-      obj = hash_table_lookup(env, literal->identifier);
-      return obj;
+      return env_lookup(env, literal->identifier);
     default:
       return obj;
   };
@@ -190,13 +251,8 @@ Object* eval_binary(Expr* expr, Env* env) {
 };
 
 Object* eval_assign(Expr* expr, Env* env) {
-  Object* value = evaluate(expr->u_expr->assign->value, env);
-  bool updated =
-      hash_table_update(env, expr->u_expr->assign->name->lexeme, value);
-  if (!updated) {
-    log_error("Undefined variable '%s'.", expr->u_expr->assign->name->lexeme);
-  }
-  return value;
+  Object* obj = evaluate(expr->u_expr->assign->value, env);
+  return env_update(env, expr->u_expr->assign->name->lexeme, obj);
 };
 
 void check_number_operand(Token* op, Object* left, Object* right) {
@@ -212,15 +268,17 @@ char* stringify(Object* obj) {
   switch (obj->type) {
     case V_NIL:
       return "nil";
-    case V_STRING:
-      return obj->value->string;
+    case V_STRING: {
+      char* str = (char*)malloc(strlen(obj->value->string) + 1);
+      strcpy(str, obj->value->string);
+      return str;
+    }
     case V_BOOL:
       return obj->value->boolean == true ? "true" : "false";
     case V_NUMBER: {
       char buf[50];
       sprintf(buf, "%.g", obj->value->number);
       char* s = strdup(buf);
-
       return s;
     }
     default:
@@ -261,4 +319,4 @@ bool is_equal(Object* a, Object* b) {
     default:
       return false;
   }
-}
+};

@@ -49,7 +49,7 @@ hash_table* hash_table_create(uint32_t size, hashfunction* hf) {
 
 void hash_table_destroy(hash_table* ht) {
   // what to do about individual elements
-  for (int i = 0; i < ht->size; i++) {
+  for (uint32_t i = 0; i < ht->size; i++) {
     free(ht->elements[i]);
   }
   free(ht->elements);
@@ -124,7 +124,7 @@ void* hash_table_lookup(hash_table* ht, const char* key) {
   return tmp->object;
 };
 
-void* hash_table_delete(hash_table* ht, const char* key) {
+bool hash_table_delete(hash_table* ht, const char* key) {
   if (key == NULL || ht == NULL)
     return false;
   size_t index = hash_table_index(ht, key);
@@ -144,7 +144,7 @@ void* hash_table_delete(hash_table* ht, const char* key) {
     // deleting from somewhere not the head
     prev->next = tmp->next;
   }
-  void* result = tmp->object;
+  // free(tmp->object);
   free(tmp);
-  return result;
+  return true;
 };

@@ -79,9 +79,10 @@ typedef enum StatementType {
   STATEMENT_RETURN
 } StatementType;
 
-typedef struct {
+typedef struct Statement {
   StatementType type;
   Expr* expr;
+  struct Statement** block_stmts;
   Token* name;
 } Statement;
 
