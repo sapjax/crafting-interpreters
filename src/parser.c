@@ -7,10 +7,8 @@ Statement* statement_print(Parser* parser);
 Statement* statement_expression(Parser* parser);
 Statement* statement_block(Parser* parser);
 Statement* statement_var(Parser* parser);
-Statement* new_statement(StatementType type,
-                         Expr* expr,
-                         Token* name,
-                         Statement** block_stmts);
+Statement* statement_if(Parser* parser);
+Statement* new_statement(StatementType type);
 
 Statement* declaration(Parser* parser);
 
@@ -134,19 +132,36 @@ Statement* declaration(Parser* parser) {
   return statement(parser);
 };
 
-Statement* new_statement(StatementType type,
-                         Expr* expr,
-                         Token* name,
-                         Statement** block_stmts) {
+Statement* new_statement(StatementType type) {
   Statement* stmt = malloc(sizeof(Statement));
   stmt->type = type;
-  stmt->expr = expr;
-  stmt->name = name;
-  stmt->block_stmts = block_stmts;
+  UnTaggedStatement* u_stmt = malloc(sizeof(UnTaggedStatement));
+  stmt->u_stmt = u_stmt;
+  switch (type) {
+    case STATEMENT_VAR:
+      u_stmt->var = malloc(sizeof(StatementVar));
+      break;
+    case STATEMENT_PRINT:
+      u_stmt->print = malloc(sizeof(StatementPrint));
+      break;
+    case STATEMENT_EXPRESSION:
+      u_stmt->expr = malloc(sizeof(StatementExpression));
+      break;
+    case STATEMENT_BLOCK:
+      u_stmt->block = malloc(sizeof(StatementBlock));
+      break;
+    case STATEMENT_IF:
+      u_stmt->if_stmt = malloc(sizeof(StatementIf));
+      break;
+    default:
+      break;
+  }
   return stmt;
 };
 
 Statement* statement(Parser* parser) {
+  if (match(parser, IF))
+    return statement_if(parser);
   if (match(parser, PRINT))
     return statement_print(parser);
   if (match(parser, LEFT_BRACE))
@@ -161,19 +176,42 @@ Statement* statement_var(Parser* parser) {
     initializer = expression(parser);
   }
   consume(parser, SEMICOLON, "Expect ';' after variable declaration.");
-  return new_statement(STATEMENT_VAR, initializer, name, NULL);
+  Statement* stmt = new_statement(STATEMENT_VAR);
+  stmt->u_stmt->var->name = name;
+  stmt->u_stmt->var->initializer = initializer;
+  return stmt;
+};
+
+Statement* statement_if(Parser* parser) {
+  consume(parser, LEFT_PAREN, "Expect '(' after 'if'.");
+  Expr* condition = expression(parser);
+  consume(parser, RIGHT_PAREN, "Expect ')' after if condition.");
+  Statement* then_branch = statement(parser);
+  Statement* else_branch = NULL;
+  if (match(parser, ELSE)) {
+    else_branch = statement(parser);
+  }
+  Statement* stmt = new_statement(STATEMENT_IF);
+  stmt->u_stmt->if_stmt->condition = condition;
+  stmt->u_stmt->if_stmt->then_branch = then_branch;
+  stmt->u_stmt->if_stmt->else_branch = else_branch;
+  return stmt;
 };
 
 Statement* statement_print(Parser* parser) {
   Expr* expr = expression(parser);
   consume(parser, SEMICOLON, "Expect ';' after value.");
-  return new_statement(STATEMENT_PRINT, expr, NULL, NULL);
+  Statement* stmt = new_statement(STATEMENT_PRINT);
+  stmt->u_stmt->print->expr = expr;
+  return stmt;
 };
 
 Statement* statement_expression(Parser* parser) {
   Expr* expr = expression(parser);
   consume(parser, SEMICOLON, "Expect ';' after expression.");
-  return new_statement(STATEMENT_EXPRESSION, expr, NULL, NULL);
+  Statement* stmt = new_statement(STATEMENT_EXPRESSION);
+  stmt->u_stmt->expr->expr = expr;
+  return stmt;
 };
 
 Statement* statement_block(Parser* parser) {
@@ -186,7 +224,9 @@ Statement* statement_block(Parser* parser) {
   }
   stmts[i] = NULL;
   consume(parser, RIGHT_BRACE, "Expect '}' after block.");
-  return new_statement(STATEMENT_BLOCK, NULL, NULL, stmts);
+  Statement* stmt = new_statement(STATEMENT_BLOCK);
+  stmt->u_stmt->block->stms = stmts;
+  return stmt;
 };
 
 Expr* expression(Parser* parser) {
@@ -370,76 +410,4 @@ bool match_any(Parser* parser, TokenType* types) {
     }
   }
   return false;
-};
-
-// AST Printer
-void print_expr(Expr* expr);
-void print_binary(Expr* expr);
-void print_unary(Expr* expr);
-void print_grouping(Expr* expr);
-void print_literal(Expr* expr);
-void print_parenthesize(char* name, Expr** exprs, int size);
-
-void print_ast(Statement** statements) {
-  for (int i = 0; statements[i] != NULL; i++) {
-    Statement* stmt = statements[i];
-    print_expr(stmt->expr);
-  }
-}
-
-void print_expr(Expr* expr) {
-  if (expr == NULL) {
-    return;
-  }
-  switch (expr->type) {
-    case E_Binary:
-      return print_binary(expr);
-    case E_Unary:
-      return print_unary(expr);
-    case E_Grouping:
-      return print_grouping(expr);
-    case E_Literal:
-      return print_literal(expr);
-    default:
-      return;
-  }
-}
-
-void print_binary(Expr* expr) {
-  Expr* exprs[] = {expr->u_expr->binary->left, expr->u_expr->binary->right};
-  print_parenthesize(type_to_string(expr->u_expr->binary->op->type), exprs, 2);
-}
-
-void print_unary(Expr* expr) {
-  Expr* exprs[] = {expr->u_expr->unary->right};
-  print_parenthesize(type_to_string(expr->u_expr->unary->op->type), exprs, 1);
-}
-
-void print_grouping(Expr* expr) {
-  Expr* exprs[] = {expr->u_expr->grouping->expression};
-  print_parenthesize("group", exprs, 1);
-}
-
-void print_literal(Expr* expr) {
-  Token* token = expr->u_expr->literal->value;
-  switch (token->type) {
-    case STRING:
-      printf("%s", token->lexeme);
-      break;
-    case NUMBER:
-      printf("%.1f", token->literal->number);
-      break;
-    default:
-      printf("%s", type_to_string(token->type));
-      return;
-  }
-}
-
-void print_parenthesize(char* name, Expr** exprs, int size) {
-  printf("(%s", name);
-  for (int i = 0; i < size; i++) {
-    printf(" ");
-    print_expr(exprs[i]);
-  }
-  printf(")");
 };

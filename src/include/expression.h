@@ -79,11 +79,40 @@ typedef enum StatementType {
   STATEMENT_RETURN
 } StatementType;
 
+typedef struct StatementExpression {
+  Expr* expr;
+} StatementExpression;
+
+typedef struct StatementPrint {
+  Expr* expr;
+} StatementPrint;
+
+typedef struct StatementVar {
+  Token* name;
+  Expr* initializer;
+} StatementVar;
+
+typedef struct StatementBlock {
+  struct Statement** stms;
+} StatementBlock;
+
+typedef struct StatementIf {
+  Expr* condition;
+  struct Statement* then_branch;
+  struct Statement* else_branch;
+} StatementIf;
+
+typedef union UnTaggedStatement {
+  struct StatementExpression* expr;
+  struct StatementPrint* print;
+  struct StatementVar* var;
+  struct StatementBlock* block;
+  struct StatementIf* if_stmt;
+} UnTaggedStatement;
+
 typedef struct Statement {
   StatementType type;
-  Expr* expr;
-  struct Statement** block_stmts;
-  Token* name;
+  union UnTaggedStatement* u_stmt;
 } Statement;
 
 #endif

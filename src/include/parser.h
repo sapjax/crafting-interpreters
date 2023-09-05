@@ -25,6 +25,4 @@ Parser* new_parser(Token** tokens, int num_tokens);
 
 Statement** parse(Parser* parser);
 
-void print_ast(Statement** statement);
-
 #endif

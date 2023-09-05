@@ -29,7 +29,6 @@ int main(int argc, char** argv) {
   print_lexer(lexer);
   Parser* parser = new_parser(tokens, lexer->num_tokens);
   Statement** statements = parse(parser);
-  print_ast(statements);
   interpret(statements);
   return 0;
 }

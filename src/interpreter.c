@@ -67,26 +67,28 @@ void interpret(Statement** statements) {
   }
   free(statements);
   env_free(env);
-  // TODO: need to free Object* obj
 };
 
+// TODO: need to free Object* obj
 void execute(Statement* statement, Env* env) {
   switch (statement->type) {
     case STATEMENT_EXPRESSION: {
-      evaluate(statement->expr, env);
+      evaluate(statement->u_stmt->expr->expr, env);
+      // NOTE: we can't free object here, cause it may define a variable in env
+      // if we free the object, the variable may be freed too
       break;
     }
     case STATEMENT_PRINT: {
-      Object* obj = evaluate(statement->expr, env);
+      Object* obj = evaluate(statement->u_stmt->print->expr, env);
       char* str = stringify(obj);
       log_info("%s\n", str);
       // free(obj);
       break;
     }
     case STATEMENT_VAR: {
-      if (statement->expr != NULL) {
-        Object* obj = evaluate(statement->expr, env);
-        env_define(env, statement->name->lexeme, obj);
+      if (statement->u_stmt->var->initializer != NULL) {
+        Object* obj = evaluate(statement->u_stmt->var->initializer, env);
+        env_define(env, statement->u_stmt->var->name->lexeme, obj);
       }
       break;
     }
@@ -95,14 +97,24 @@ void execute(Statement* statement, Env* env) {
       eval_block(statement, block_env);
       break;
     }
+    case STATEMENT_IF: {
+      Object* obj = evaluate(statement->u_stmt->if_stmt->condition, env);
+      if (is_truthy(obj)) {
+        execute(statement->u_stmt->if_stmt->then_branch, env);
+      } else if (statement->u_stmt->if_stmt->else_branch != NULL) {
+        execute(statement->u_stmt->if_stmt->else_branch, env);
+      }
+      free(obj);
+      break;
+    }
     default:
       break;
   }
 };
 
 void eval_block(Statement* stmt, Env* env) {
-  for (int i = 0; stmt->block_stmts[i] != NULL; i++) {
-    Statement* statement = stmt->block_stmts[i];
+  for (int i = 0; stmt->u_stmt->block->stms[i] != NULL; i++) {
+    Statement* statement = stmt->u_stmt->block->stms[i];
     execute(statement, env);
   }
   env_free(env);
@@ -136,6 +148,14 @@ Object* eval_literal(Expr* expr, Env* env) {
   Literal* literal = token->literal;
   Object* obj = new_object();
   switch (token->type) {
+    case TRUE:
+      obj->type = V_BOOL;
+      obj->value->boolean = true;
+      return obj;
+    case FALSE:
+      obj->type = V_BOOL;
+      obj->value->boolean = false;
+      return obj;
     case STRING:
       obj->type = V_STRING;
       obj->value->string = (char*)malloc(strlen(literal->string) + 1);
