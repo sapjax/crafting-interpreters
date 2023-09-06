@@ -110,12 +110,18 @@ typedef struct StatementIf {
   struct Statement* else_branch;
 } StatementIf;
 
+typedef struct StatementWhile {
+  Expr* condition;
+  struct Statement* body;
+} StatementWhile;
+
 typedef union UnTaggedStatement {
   struct StatementExpression* expr;
   struct StatementPrint* print;
   struct StatementVar* var;
   struct StatementBlock* block;
   struct StatementIf* if_stmt;
+  struct StatementWhile* while_stmt;
 } UnTaggedStatement;
 
 typedef struct Statement {

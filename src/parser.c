@@ -8,6 +8,7 @@ Statement* statement_expression(Parser* parser);
 Statement* statement_block(Parser* parser);
 Statement* statement_var(Parser* parser);
 Statement* statement_if(Parser* parser);
+Statement* statement_while(Parser* parser);
 Statement* new_statement(StatementType type);
 
 Statement* declaration(Parser* parser);
@@ -166,6 +167,9 @@ Statement* new_statement(StatementType type) {
     case STATEMENT_IF:
       u_stmt->if_stmt = malloc(sizeof(StatementIf));
       break;
+    case STATEMENT_WHILE:
+      u_stmt->while_stmt = malloc(sizeof(StatementWhile));
+      break;
     default:
       break;
   }
@@ -177,6 +181,8 @@ Statement* statement(Parser* parser) {
     return statement_if(parser);
   if (match(parser, PRINT))
     return statement_print(parser);
+  if (match(parser, WHILE))
+    return statement_while(parser);
   if (match(parser, LEFT_BRACE))
     return statement_block(parser);
   return statement_expression(parser);
@@ -216,6 +222,17 @@ Statement* statement_print(Parser* parser) {
   consume(parser, SEMICOLON, "Expect ';' after value.");
   Statement* stmt = new_statement(STATEMENT_PRINT);
   stmt->u_stmt->print->expr = expr;
+  return stmt;
+};
+
+Statement* statement_while(Parser* parser) {
+  consume(parser, LEFT_PAREN, "Expect '(' after 'while'.");
+  Expr* condition = expression(parser);
+  consume(parser, RIGHT_PAREN, "Expect ')' after condition.");
+  Statement* body = statement(parser);
+  Statement* stmt = new_statement(STATEMENT_WHILE);
+  stmt->u_stmt->while_stmt->condition = condition;
+  stmt->u_stmt->while_stmt->body = body;
   return stmt;
 };
 

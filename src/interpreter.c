@@ -107,6 +107,13 @@ void execute(Statement* statement, Env* env) {
       free(obj);
       break;
     }
+    case STATEMENT_WHILE: {
+      while (
+          is_truthy(evaluate(statement->u_stmt->while_stmt->condition, env))) {
+        execute(statement->u_stmt->while_stmt->body, env);
+      }
+      break;
+    }
     default:
       break;
   }
@@ -267,8 +274,6 @@ Object* eval_binary(Expr* expr, Env* env) {
     default:
       break;
   }
-  free(left);
-  free(right);
   return obj;
 };
 
