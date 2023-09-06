@@ -14,6 +14,8 @@ Statement* declaration(Parser* parser);
 
 Expr* expression(Parser* parser);
 Expr* assignment(Parser* parser);
+Expr* logic_or(Parser* parser);
+Expr* logci_and(Parser* parser);
 Expr* equality(Parser* parser);
 Expr* comparison(Parser* parser);
 Expr* term(Parser* parser);
@@ -41,6 +43,7 @@ Expr* new_literal(Token* value);
 Expr* new_grouping(Expr* expression);
 Expr* new_variable(Token* value);
 Expr* new_assign(Token* name, Expr* value);
+Expr* new_logical(Expr* left, Token* op, Expr* right);
 
 Parser* new_parser(Token** tokens, int num_tokens) {
   Parser* parser = (Parser*)malloc(sizeof(Token*) * num_tokens + sizeof(int));
@@ -111,6 +114,16 @@ Expr* new_assign(Token* name, Expr* value) {
   UnTaggedExpr* u_expr = new_untagged_expr();
   u_expr->assign = assign;
   return new_expr(u_expr, E_Assign);
+};
+
+Expr* new_logical(Expr* left, Token* op, Expr* right) {
+  ExprLogical* logical = malloc(sizeof(ExprLogical));
+  logical->left = left;
+  logical->op = op;
+  logical->right = right;
+  UnTaggedExpr* u_expr = new_untagged_expr();
+  u_expr->logical = logical;
+  return new_expr(u_expr, E_Logical);
 };
 
 Statement** parse(Parser* parser) {
@@ -234,7 +247,7 @@ Expr* expression(Parser* parser) {
 };
 
 Expr* assignment(Parser* parser) {
-  Expr* expr = equality(parser);
+  Expr* expr = logic_or(parser);
   if (match(parser, EQUAL)) {
     Token* equals = previous(parser);
     Expr* value = assignment(parser);
@@ -246,6 +259,26 @@ Expr* assignment(Parser* parser) {
 
     free(value);
     error(equals, "Invalid assignment target.");
+  }
+  return expr;
+}
+
+Expr* logic_or(Parser* parser) {
+  Expr* expr = logci_and(parser);
+  while (match(parser, OR)) {
+    Token* op = previous(parser);
+    Expr* right = logci_and(parser);
+    expr = new_logical(expr, op, right);
+  }
+  return expr;
+}
+
+Expr* logci_and(Parser* parser) {
+  Expr* expr = equality(parser);
+  while (match(parser, AND)) {
+    Token* op = previous(parser);
+    Expr* right = equality(parser);
+    expr = new_logical(expr, op, right);
   }
   return expr;
 }

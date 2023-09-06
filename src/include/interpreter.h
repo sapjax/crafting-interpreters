@@ -58,9 +58,13 @@ Object* eval_binary(Expr* expr, Env* env);
 
 Object* eval_assign(Expr* expr, Env* env);
 
+Object* eval_logical(Expr* expr, Env* env);
+
 void eval_block(Statement* stmt, Env* env);
 
 bool is_truthy(Object* obj);
+
+bool is_logical_truthy(Object* obj);
 
 void check_number_operand(Token* op, Object* left, Object* right);
 

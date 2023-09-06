@@ -134,6 +134,8 @@ Object* evaluate(Expr* expr, Env* env) {
       return eval_variable(expr, env);
     case E_Assign:
       return eval_assign(expr, env);
+    case E_Logical:
+      return eval_logical(expr, env);
     default:
       return new_object();
   }
@@ -282,6 +284,20 @@ void check_number_operand(Token* op, Object* left, Object* right) {
   }
 };
 
+Object* eval_logical(Expr* expr, Env* env) {
+  Object* left = evaluate(expr->u_expr->logical->left, env);
+  if (expr->u_expr->logical->op->type == OR) {
+    if (is_logical_truthy(left)) {
+      return left;
+    }
+  } else {
+    if (!is_logical_truthy(left)) {
+      return left;
+    }
+  }
+  return evaluate(expr->u_expr->logical->right, env);
+};
+
 char* stringify(Object* obj) {
   if (obj == NULL)
     return "nil";
@@ -306,12 +322,27 @@ char* stringify(Object* obj) {
   }
 };
 
+// only true is true, else is false, used for if/while
 bool is_truthy(Object* obj) {
   if (obj == NULL)
     return false;
   if (obj->type == V_BOOL)
     return obj->value->boolean;
   return false;
+};
+
+// only false and nil is logical false, used for or/and
+bool is_logical_truthy(Object* obj) {
+  if (obj == NULL) {
+    return false;
+  }
+  if (obj->type == V_NIL) {
+    return false;
+  }
+  if (obj->type == V_BOOL && obj->value->boolean == false) {
+    return false;
+  }
+  return true;
 };
 
 bool is_equal(Object* a, Object* b) {
