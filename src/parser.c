@@ -9,6 +9,7 @@ Statement* statement_block(Parser* parser);
 Statement* statement_var(Parser* parser);
 Statement* statement_if(Parser* parser);
 Statement* statement_while(Parser* parser);
+Statement* statement_for(Parser* parser);
 Statement* new_statement(StatementType type);
 
 Statement* declaration(Parser* parser);
@@ -183,6 +184,8 @@ Statement* statement(Parser* parser) {
     return statement_print(parser);
   if (match(parser, WHILE))
     return statement_while(parser);
+  if (match(parser, FOR))
+    return statement_for(parser);
   if (match(parser, LEFT_BRACE))
     return statement_block(parser);
   return statement_expression(parser);
@@ -234,6 +237,64 @@ Statement* statement_while(Parser* parser) {
   stmt->u_stmt->while_stmt->condition = condition;
   stmt->u_stmt->while_stmt->body = body;
   return stmt;
+};
+
+Statement* statement_for(Parser* parser) {
+  consume(parser, LEFT_PAREN, "Expect '(' after 'for'.");
+
+  Statement* initializer;
+  if (match(parser, SEMICOLON)) {
+    initializer = NULL;
+  } else if (match(parser, VAR)) {
+    initializer = statement_var(parser);
+  } else {
+    initializer = statement_expression(parser);
+  }
+
+  Expr* condition = NULL;
+  if (!check(parser, SEMICOLON)) {
+    condition = expression(parser);
+  }
+  consume(parser, SEMICOLON, "Expect ';' after loop condition.");
+
+  Expr* increment = NULL;
+  if (!check(parser, RIGHT_PAREN)) {
+    increment = expression(parser);
+  }
+  consume(parser, RIGHT_PAREN, "Expect ')' after for clauses.");
+
+  Statement* body = statement(parser);
+
+  if (increment != NULL) {
+    Statement* increment_stmt = new_statement(STATEMENT_EXPRESSION);
+    increment_stmt->u_stmt->expr->expr = increment;
+
+    Statement* block = new_statement(STATEMENT_BLOCK);
+    block->u_stmt->block->stms = (Statement**)malloc(sizeof(Statement*) * 3);
+    block->u_stmt->block->stms[0] = body;
+    block->u_stmt->block->stms[1] = increment_stmt;
+    block->u_stmt->block->stms[2] = NULL;
+    body = block;
+  }
+
+  if (condition == NULL)
+    condition = new_literal(new_token(TRUE, NULL, NULL, 0));
+
+  Statement* while_stmt = new_statement(STATEMENT_WHILE);
+  while_stmt->u_stmt->while_stmt->condition = condition;
+  while_stmt->u_stmt->while_stmt->body = body;
+  body = while_stmt;
+
+  if (initializer != NULL) {
+    Statement* block = new_statement(STATEMENT_BLOCK);
+    block->u_stmt->block->stms = (Statement**)malloc(sizeof(Statement*) * 3);
+    block->u_stmt->block->stms[0] = initializer;
+    block->u_stmt->block->stms[1] = body;
+    block->u_stmt->block->stms[2] = NULL;
+    body = block;
+  }
+
+  return body;
 };
 
 Statement* statement_expression(Parser* parser) {
@@ -368,6 +429,13 @@ Expr* primary(Parser* parser) {
     Expr* expr = expression(parser);
     consume(parser, RIGHT_PAREN, "Expect ')' after expression.");
     return new_grouping(expr);
+  }
+
+  if (match(parser, LEFT_BRACE)) {
+    // TODO: handle {} in expression.
+    Statement* stmts = statement_block(parser);
+    free(stmts);
+    return NULL;
   }
 
   error(peek(parser), "Expect expression");
