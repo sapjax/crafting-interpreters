@@ -19,6 +19,7 @@
 
 typedef enum ExprType {
   E_Binary,
+  E_Call,
   E_Unary,
   E_Grouping,
   E_Literal,
@@ -29,6 +30,7 @@ typedef enum ExprType {
 
 typedef union UnTaggedExpr {
   struct ExprBinary* binary;
+  struct ExprCall* call;
   struct ExprUnary* unary;
   struct ExprLiteral* literal;
   struct ExprGrouping* grouping;
@@ -46,6 +48,12 @@ typedef struct ExprUnary {
   Token* op;
   struct Expr* right;
 } ExprUnary;
+
+typedef struct ExprCall {
+  Expr* callee;
+  Token* paren;
+  Expr** arguments;
+} ExprCall;
 
 typedef struct ExprVariable {
   Token* name;
@@ -110,10 +118,21 @@ typedef struct StatementIf {
   struct Statement* else_branch;
 } StatementIf;
 
+typedef struct StatementFunction {
+  Token* name;
+  Token** params;
+  struct Statement* body;
+} StatementFunction;
+
 typedef struct StatementWhile {
   Expr* condition;
   struct Statement* body;
 } StatementWhile;
+
+typedef struct StatementReturn {
+  Token* keyword;
+  Expr* value;
+} StatementReturn;
 
 typedef union UnTaggedStatement {
   struct StatementExpression* expr;
@@ -121,7 +140,9 @@ typedef union UnTaggedStatement {
   struct StatementVar* var;
   struct StatementBlock* block;
   struct StatementIf* if_stmt;
+  struct StatementFunction* function;
   struct StatementWhile* while_stmt;
+  struct StatementReturn* return_stmt;
 } UnTaggedStatement;
 
 typedef struct Statement {

@@ -10,6 +10,7 @@ typedef union Value {
   double number;
   bool boolean;
   bool nil;
+  StatementFunction* function;
 } Value;
 
 typedef enum ValueType {
@@ -17,6 +18,7 @@ typedef enum ValueType {
   V_NUMBER,
   V_BOOL,
   V_NIL,
+  V_FUNCTION
 } ValueType;
 
 typedef struct {
@@ -25,11 +27,12 @@ typedef struct {
 } Object;
 
 typedef struct Env {
+  char* name;
   struct Env* enclosing;
   hash_table* map;
 } Env;
 
-Env* new_env(Env* enclosing);
+Env* new_env(Env* enclosing, char* name);
 
 Object* env_define(Env* env, char* identifier, Object* value);
 Object* env_update(Env* env, char* identifier, Object* value);
@@ -59,6 +62,8 @@ Object* eval_binary(Expr* expr, Env* env);
 Object* eval_assign(Expr* expr, Env* env);
 
 Object* eval_logical(Expr* expr, Env* env);
+
+Object* eval_call(Expr* expr, Env* env);
 
 void eval_block(Statement* stmt, Env* env);
 

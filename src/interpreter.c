@@ -4,8 +4,25 @@
 #include <string.h>
 #include "include/log.h"
 
-Env* new_env(Env* enclosing) {
+static Env* global_env = NULL;
+void* latest_return_value = NULL;
+bool function_returned = false;
+
+void interpret(Statement** statements) {
+  global_env = new_env(NULL, "global");
+  Env* env = new_env(global_env, "interpret");
+  for (int i = 0; statements[i] != NULL; i++) {
+    Statement* stmt = statements[i];
+    execute(stmt, env);
+  }
+  free(statements);
+  env_free(env);
+  free(latest_return_value);
+};
+
+Env* new_env(Env* enclosing, char* name) {
   Env* env = malloc(sizeof(*env));
+  env->name = name;
   env->enclosing = enclosing;
   env->map = hash_table_create(8192, NULL);
   return env;
@@ -59,30 +76,20 @@ Object* new_object() {
   return obj;
 };
 
-void interpret(Statement** statements) {
-  Env* env = new_env(NULL);
-  for (int i = 0; statements[i] != NULL; i++) {
-    Statement* stmt = statements[i];
-    execute(stmt, env);
-  }
-  free(statements);
-  env_free(env);
-};
-
 // TODO: need to free Object* obj
 void execute(Statement* statement, Env* env) {
   switch (statement->type) {
     case STATEMENT_EXPRESSION: {
       evaluate(statement->u_stmt->expr->expr, env);
-      // NOTE: we can't free object here, cause it may define a variable in env
-      // if we free the object, the variable may be freed too
+      // NOTE: we can't free object here, cause in expression we may define a
+      // variable in env,  if we free the object, the variable may be freed too
+      // instead we free all objects in env_free.
       break;
     }
     case STATEMENT_PRINT: {
       Object* obj = evaluate(statement->u_stmt->print->expr, env);
       char* str = stringify(obj);
       log_info("%s\n", str);
-      // free(obj);
       break;
     }
     case STATEMENT_VAR: {
@@ -93,7 +100,7 @@ void execute(Statement* statement, Env* env) {
       break;
     }
     case STATEMENT_BLOCK: {
-      Env* block_env = new_env(env);
+      Env* block_env = new_env(env, "block");
       eval_block(statement, block_env);
       break;
     }
@@ -114,6 +121,24 @@ void execute(Statement* statement, Env* env) {
       }
       break;
     }
+    // function declare
+    // we should define function in global env
+    case STATEMENT_FUNCTION: {
+      Object* obj = new_object();
+      obj->type = V_FUNCTION;
+      obj->value->function = statement->u_stmt->function;
+      env_define(global_env, statement->u_stmt->function->name->lexeme, obj);
+      break;
+    }
+    case STATEMENT_RETURN: {
+      if (strcmp(env->name, "interpret") == 0) {
+        log_error("Can't return from top-level code.");
+        break;
+      }
+      Object* obj = evaluate(statement->u_stmt->return_stmt->value, env);
+      latest_return_value = obj;
+      break;
+    }
     default:
       break;
   }
@@ -121,18 +146,29 @@ void execute(Statement* statement, Env* env) {
 
 void eval_block(Statement* stmt, Env* env) {
   for (int i = 0; stmt->u_stmt->block->stms[i] != NULL; i++) {
+    if (function_returned)
+      break;
     Statement* statement = stmt->u_stmt->block->stms[i];
     execute(statement, env);
+    // after return, we should break block to skip the rest statements
+    if (statement->type == STATEMENT_RETURN) {
+      function_returned = true;
+      break;
+    }
   }
   env_free(env);
 };
 
 Object* evaluate(Expr* expr, Env* env) {
+  if (expr == NULL)
+    return new_object();
   switch (expr->type) {
     case E_Literal:
       return eval_literal(expr, env);
     case E_Unary:
       return eval_unary(expr, env);
+    case E_Call:
+      return eval_call(expr, env);
     case E_Grouping:
       return eval_grouping(expr, env);
     case E_Binary:
@@ -174,9 +210,6 @@ Object* eval_literal(Expr* expr, Env* env) {
       obj->type = V_NUMBER;
       obj->value->number = literal->number;
       return obj;
-    case IDENTIFIER:
-      free(obj);
-      return env_lookup(env, literal->identifier);
     default:
       return obj;
   };
@@ -200,6 +233,38 @@ Object* eval_unary(Expr* expr, Env* env) {
   }
   free(right);
   return obj;
+};
+
+Object* eval_call(Expr* expr, Env* env) {
+  // callee is a function object, which return by env_lookup in eval_literal
+  Object* callee = evaluate(expr->u_expr->call->callee, env);
+  Object** arguments = malloc(sizeof(Object*) + sizeof(NULL));
+
+  // create a temp env for function local arguments
+  Env* fn_env = new_env(global_env, "function");
+
+  int i = 0;
+  while (expr->u_expr->call->arguments[i] != NULL) {
+    arguments = realloc(arguments, sizeof(Object*) * (i + 1) + sizeof(NULL));
+    arguments[i] = evaluate(expr->u_expr->call->arguments[i], env);
+    // set the function arguments to params
+    env_define(fn_env, callee->value->function->params[i]->lexeme,
+               arguments[i]);
+    i++;
+  }
+
+  if (callee->type != V_FUNCTION) {
+    log_error("Can only call functions and classes.");
+  }
+
+  // set a global variable for function return value
+  latest_return_value = new_object();
+  function_returned = false;
+  eval_block(callee->value->function->body, fn_env);
+  function_returned = false;
+  free(arguments);
+  // check the return value
+  return latest_return_value;
 };
 
 Object* eval_grouping(Expr* expr, Env* env) {
@@ -274,6 +339,7 @@ Object* eval_binary(Expr* expr, Env* env) {
     default:
       break;
   }
+  // free(right);
   return obj;
 };
 
@@ -300,6 +366,7 @@ Object* eval_logical(Expr* expr, Env* env) {
       return left;
     }
   }
+  free(left);
   return evaluate(expr->u_expr->logical->right, env);
 };
 
@@ -318,7 +385,7 @@ char* stringify(Object* obj) {
       return obj->value->boolean == true ? "true" : "false";
     case V_NUMBER: {
       char buf[50];
-      sprintf(buf, "%.g", obj->value->number);
+      sprintf(buf, "%.1f", obj->value->number);
       char* s = strdup(buf);
       return s;
     }

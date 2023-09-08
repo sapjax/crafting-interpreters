@@ -1,15 +1,18 @@
 #include "include/parser.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 Statement* statement(Parser* parser);
 Statement* statement_print(Parser* parser);
 Statement* statement_expression(Parser* parser);
 Statement* statement_block(Parser* parser);
-Statement* statement_var(Parser* parser);
+Statement* declare_var(Parser* parser);
+Statement* declare_fun(Parser* parser, char* kind);
 Statement* statement_if(Parser* parser);
 Statement* statement_while(Parser* parser);
 Statement* statement_for(Parser* parser);
+Statement* statement_return(Parser* parser);
 Statement* new_statement(StatementType type);
 
 Statement* declaration(Parser* parser);
@@ -23,6 +26,8 @@ Expr* comparison(Parser* parser);
 Expr* term(Parser* parser);
 Expr* factor(Parser* parser);
 Expr* unary(Parser* parser);
+Expr* call(Parser* parser);
+Expr* finish_call(Parser* parser, Expr* expr);
 Expr* primary(Parser* parser);
 
 static Token* advance(Parser* parser);
@@ -42,6 +47,7 @@ Expr* new_expr(UnTaggedExpr* u_expr, ExprType type);
 Expr* new_binary(Expr* left, Token* op, Expr* right);
 Expr* new_unary(Token* op, Expr* right);
 Expr* new_literal(Token* value);
+Expr* new_call(Expr* callee, Token* paren, Expr** arguments);
 Expr* new_grouping(Expr* expression);
 Expr* new_variable(Token* value);
 Expr* new_assign(Token* name, Expr* value);
@@ -91,6 +97,16 @@ Expr* new_literal(Token* value) {
   UnTaggedExpr* u_expr = new_untagged_expr();
   u_expr->literal = literal;
   return new_expr(u_expr, E_Literal);
+};
+
+Expr* new_call(Expr* callee, Token* paren, Expr** arguments) {
+  ExprCall* call = malloc(sizeof(ExprCall));
+  call->callee = callee;
+  call->paren = paren;
+  call->arguments = arguments;
+  UnTaggedExpr* u_expr = new_untagged_expr();
+  u_expr->call = call;
+  return new_expr(u_expr, E_Call);
 };
 
 Expr* new_grouping(Expr* expression) {
@@ -143,7 +159,9 @@ Statement** parse(Parser* parser) {
 
 Statement* declaration(Parser* parser) {
   if (match(parser, VAR))
-    return statement_var(parser);
+    return declare_var(parser);
+  if (match(parser, FUN))
+    return declare_fun(parser, "function");
   return statement(parser);
 };
 
@@ -171,6 +189,12 @@ Statement* new_statement(StatementType type) {
     case STATEMENT_WHILE:
       u_stmt->while_stmt = malloc(sizeof(StatementWhile));
       break;
+    case STATEMENT_FUNCTION:
+      u_stmt->function = malloc(sizeof(StatementFunction));
+      break;
+    case STATEMENT_RETURN:
+      u_stmt->return_stmt = malloc(sizeof(StatementReturn));
+      break;
     default:
       break;
   }
@@ -182,6 +206,8 @@ Statement* statement(Parser* parser) {
     return statement_if(parser);
   if (match(parser, PRINT))
     return statement_print(parser);
+  if (match(parser, RETURN))
+    return statement_return(parser);
   if (match(parser, WHILE))
     return statement_while(parser);
   if (match(parser, FOR))
@@ -191,7 +217,7 @@ Statement* statement(Parser* parser) {
   return statement_expression(parser);
 };
 
-Statement* statement_var(Parser* parser) {
+Statement* declare_var(Parser* parser) {
   Token* name = consume(parser, IDENTIFIER, "Expect variable name.");
   Expr* initializer = NULL;
   if (match(parser, EQUAL)) {
@@ -201,6 +227,41 @@ Statement* statement_var(Parser* parser) {
   Statement* stmt = new_statement(STATEMENT_VAR);
   stmt->u_stmt->var->name = name;
   stmt->u_stmt->var->initializer = initializer;
+  return stmt;
+};
+
+Statement* declare_fun(Parser* parser, char* kind) {
+  bool is_method = strcmp(kind, "method") == 0;
+  Token* name =
+      consume(parser, IDENTIFIER,
+              is_method ? "Expect method name." : "Expect function name.");
+  consume(parser, LEFT_PAREN,
+          is_method ? "Expect '(' after method name."
+                    : "Expect '(' after function name.");
+  Token** parameters = malloc(sizeof(Token*) * 0 + sizeof(NULL));
+  int i = 0;
+  if (!check(parser, RIGHT_PAREN)) {
+    do {
+      if (i >= 255) {
+        error(peek(parser), "Can't have more than 255 parameters.");
+      }
+      parameters = realloc(parameters, sizeof(Token*) * (i + 1) + sizeof(NULL));
+      parameters[i] = consume(parser, IDENTIFIER, "Expect parameter name.");
+      i++;
+    } while (match(parser, COMMA));
+  }
+  parameters[i] = NULL;
+  consume(parser, RIGHT_PAREN, "Expect ')' after parameters.");
+
+  consume(parser, LEFT_BRACE,
+          is_method ? "Expect '{' before method body."
+                    : "Expect '{' before function body.");
+
+  Statement* body = statement_block(parser);
+  Statement* stmt = new_statement(STATEMENT_FUNCTION);
+  stmt->u_stmt->function->name = name;
+  stmt->u_stmt->function->params = parameters;
+  stmt->u_stmt->function->body = body;
   return stmt;
 };
 
@@ -228,6 +289,19 @@ Statement* statement_print(Parser* parser) {
   return stmt;
 };
 
+Statement* statement_return(Parser* parser) {
+  Token* keyword = previous(parser);
+  Expr* value = NULL;
+  if (!check(parser, SEMICOLON)) {
+    value = expression(parser);
+  }
+  consume(parser, SEMICOLON, "Expect ';' after return value.");
+  Statement* stmt = new_statement(STATEMENT_RETURN);
+  stmt->u_stmt->return_stmt->keyword = keyword;
+  stmt->u_stmt->return_stmt->value = value;
+  return stmt;
+};
+
 Statement* statement_while(Parser* parser) {
   consume(parser, LEFT_PAREN, "Expect '(' after 'while'.");
   Expr* condition = expression(parser);
@@ -246,7 +320,7 @@ Statement* statement_for(Parser* parser) {
   if (match(parser, SEMICOLON)) {
     initializer = NULL;
   } else if (match(parser, VAR)) {
-    initializer = statement_var(parser);
+    initializer = declare_var(parser);
   } else {
     initializer = statement_expression(parser);
   }
@@ -412,7 +486,36 @@ Expr* unary(Parser* parser) {
     Expr* right = unary(parser);
     return new_unary(op, right);
   }
-  return primary(parser);
+  return call(parser);
+};
+
+Expr* call(Parser* parser) {
+  Expr* expr = primary(parser);
+
+  while (true) {
+    if (match(parser, LEFT_PAREN)) {
+      expr = finish_call(parser, expr);
+    } else {
+      break;
+    }
+  }
+  return expr;
+};
+
+Expr* finish_call(Parser* parser, Expr* callee) {
+  Expr** arguments = malloc(sizeof(Expr*) * 0 + sizeof(NULL));
+  int i = 0;
+  if (!check(parser, RIGHT_PAREN)) {
+    do {
+      arguments = realloc(arguments, sizeof(Expr*) * (i + 1) + sizeof(NULL));
+      arguments[i] = expression(parser);
+      i++;
+    } while (match(parser, COMMA));
+    arguments[i] = NULL;
+  }
+
+  Token* paren = consume(parser, RIGHT_PAREN, "Expect ')' after arguments.");
+  return new_call(callee, paren, arguments);
 };
 
 Expr* primary(Parser* parser) {
@@ -432,7 +535,6 @@ Expr* primary(Parser* parser) {
   }
 
   if (match(parser, LEFT_BRACE)) {
-    // TODO: handle {} in expression.
     Statement* stmts = statement_block(parser);
     free(stmts);
     return NULL;
