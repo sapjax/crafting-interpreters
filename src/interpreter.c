@@ -122,12 +122,14 @@ void execute(Statement* statement, Env* env) {
       break;
     }
     // function declare
-    // we should define function in global env
     case STATEMENT_FUNCTION: {
       Object* obj = new_object();
       obj->type = V_FUNCTION;
-      obj->value->function = statement->u_stmt->function;
-      env_define(global_env, statement->u_stmt->function->name->lexeme, obj);
+      obj->value->function = malloc(sizeof(*obj->value->function));
+      obj->value->function->declaration = statement->u_stmt->function;
+      // record function's closure env
+      obj->value->function->closure = env;
+      env_define(env, statement->u_stmt->function->name->lexeme, obj);
       break;
     }
     case STATEMENT_RETURN: {
@@ -156,8 +158,9 @@ void eval_block(Statement* stmt, Env* env) {
       break;
     }
   }
-  env_free(env);
-};
+  // NOTE: we can't free env here, cause in this block may define a function
+  // this env will be used in function's closure
+}
 
 Object* evaluate(Expr* expr, Env* env) {
   if (expr == NULL)
@@ -240,15 +243,15 @@ Object* eval_call(Expr* expr, Env* env) {
   Object* callee = evaluate(expr->u_expr->call->callee, env);
   Object** arguments = malloc(sizeof(Object*) + sizeof(NULL));
 
-  // create a temp env for function local arguments
-  Env* fn_env = new_env(global_env, "function");
+  Env* closure = callee->value->function->closure;
+  Env* fn_env = new_env(closure, "function");
 
   int i = 0;
   while (expr->u_expr->call->arguments[i] != NULL) {
     arguments = realloc(arguments, sizeof(Object*) * (i + 1) + sizeof(NULL));
     arguments[i] = evaluate(expr->u_expr->call->arguments[i], env);
     // set the function arguments to params
-    env_define(fn_env, callee->value->function->params[i]->lexeme,
+    env_define(fn_env, callee->value->function->declaration->params[i]->lexeme,
                arguments[i]);
     i++;
   }
@@ -260,9 +263,10 @@ Object* eval_call(Expr* expr, Env* env) {
   // set a global variable for function return value
   latest_return_value = new_object();
   function_returned = false;
-  eval_block(callee->value->function->body, fn_env);
+  eval_block(callee->value->function->declaration->body, fn_env);
   function_returned = false;
   free(arguments);
+  free(fn_env);
   // check the return value
   return latest_return_value;
 };

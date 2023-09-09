@@ -5,12 +5,23 @@
 #include "expression.h"
 #include "hashtable.h"
 
+typedef struct Env {
+  char* name;
+  struct Env* enclosing;
+  hash_table* map;
+} Env;
+
+typedef struct Function {
+  StatementFunction* declaration;
+  Env* closure;
+} Function;
+
 typedef union Value {
   char* string;
   double number;
   bool boolean;
   bool nil;
-  StatementFunction* function;
+  Function* function;
 } Value;
 
 typedef enum ValueType {
@@ -25,12 +36,6 @@ typedef struct {
   ValueType type;
   Value* value;
 } Object;
-
-typedef struct Env {
-  char* name;
-  struct Env* enclosing;
-  hash_table* map;
-} Env;
 
 Env* new_env(Env* enclosing, char* name);
 
