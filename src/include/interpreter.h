@@ -43,6 +43,7 @@ Object* env_define(Env* env, char* identifier, Object* value);
 Object* env_update(Env* env, char* identifier, Object* value);
 Object* env_lookup(Env* env, char* identifier);
 void env_free(Env* env);
+Env* find_declare_env(Env* env, int depth);
 
 Value* new_value();
 

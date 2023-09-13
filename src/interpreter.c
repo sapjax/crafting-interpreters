@@ -10,13 +10,12 @@ bool function_returned = false;
 
 void interpret(Statement** statements) {
   global_env = new_env(NULL, "global");
-  Env* env = new_env(global_env, "interpret");
   for (int i = 0; statements[i] != NULL; i++) {
     Statement* stmt = statements[i];
-    execute(stmt, env);
+    execute(stmt, global_env);
   }
   free(statements);
-  env_free(env);
+  env_free(global_env);
   free(latest_return_value);
 };
 
@@ -55,6 +54,17 @@ Object* env_lookup(Env* env, char* identifier) {
     }
   }
   return obj;
+};
+
+Env* find_declare_env(Env* env, int depth) {
+  if (depth == -1) {
+    return global_env;
+  }
+  Env* tmp = env;
+  for (int i = 0; i < depth; i++) {
+    tmp = tmp->enclosing;
+  }
+  return tmp;
 };
 
 void env_free(Env* env) {
@@ -147,10 +157,10 @@ void execute(Statement* statement, Env* env) {
 };
 
 void eval_block(Statement* stmt, Env* env) {
-  for (int i = 0; stmt->u_stmt->block->stms[i] != NULL; i++) {
+  for (int i = 0; stmt->u_stmt->block->stmts[i] != NULL; i++) {
     if (function_returned)
       break;
-    Statement* statement = stmt->u_stmt->block->stms[i];
+    Statement* statement = stmt->u_stmt->block->stmts[i];
     execute(statement, env);
     // after return, we should break block to skip the rest statements
     if (statement->type == STATEMENT_RETURN) {
@@ -188,7 +198,8 @@ Object* evaluate(Expr* expr, Env* env) {
 };
 
 Object* eval_variable(Expr* expr, Env* env) {
-  return env_lookup(env, expr->u_expr->variable->name->lexeme);
+  Env* declare_env = find_declare_env(env, expr->u_expr->variable->depth);
+  return env_lookup(declare_env, expr->u_expr->variable->name->lexeme);
 };
 
 Object* eval_literal(Expr* expr, Env* env) {
@@ -349,7 +360,8 @@ Object* eval_binary(Expr* expr, Env* env) {
 
 Object* eval_assign(Expr* expr, Env* env) {
   Object* obj = evaluate(expr->u_expr->assign->value, env);
-  return env_update(env, expr->u_expr->assign->name->lexeme, obj);
+  Env* declare_env = find_declare_env(env, expr->u_expr->assign->depth);
+  return env_update(declare_env, expr->u_expr->assign->name->lexeme, obj);
 };
 
 void check_number_operand(Token* op, Object* left, Object* right) {

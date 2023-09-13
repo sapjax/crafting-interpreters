@@ -1,9 +1,9 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include "include/interpreter.h"
 #include "include/lexer.h"
 #include "include/parser.h"
+#include "include/resolver.h"
 
 int main(int argc, char** argv) {
   if (argc < 2) {
@@ -29,6 +29,8 @@ int main(int argc, char** argv) {
   print_lexer(lexer);
   Parser* parser = new_parser(tokens, lexer->num_tokens);
   Statement** statements = parse(parser);
+  Resolver* resolver = new_resolver();
+  resolve(resolver, statements);
   interpret(statements);
   return 0;
 }

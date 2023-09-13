@@ -120,6 +120,7 @@ Expr* new_grouping(Expr* expression) {
 Expr* new_variable(Token* name) {
   ExprVariable* variable = malloc(sizeof(ExprVariable));
   variable->name = name;
+  variable->depth = -1;
   UnTaggedExpr* u_expr = new_untagged_expr();
   u_expr->variable = variable;
   return new_expr(u_expr, E_Variable);
@@ -129,6 +130,7 @@ Expr* new_assign(Token* name, Expr* value) {
   ExprAssign* assign = malloc(sizeof(ExprAssign));
   assign->name = name;
   assign->value = value;
+  assign->depth = -1;
   UnTaggedExpr* u_expr = new_untagged_expr();
   u_expr->assign = assign;
   return new_expr(u_expr, E_Assign);
@@ -344,10 +346,10 @@ Statement* statement_for(Parser* parser) {
     increment_stmt->u_stmt->expr->expr = increment;
 
     Statement* block = new_statement(STATEMENT_BLOCK);
-    block->u_stmt->block->stms = (Statement**)malloc(sizeof(Statement*) * 3);
-    block->u_stmt->block->stms[0] = body;
-    block->u_stmt->block->stms[1] = increment_stmt;
-    block->u_stmt->block->stms[2] = NULL;
+    block->u_stmt->block->stmts = (Statement**)malloc(sizeof(Statement*) * 3);
+    block->u_stmt->block->stmts[0] = body;
+    block->u_stmt->block->stmts[1] = increment_stmt;
+    block->u_stmt->block->stmts[2] = NULL;
     body = block;
   }
 
@@ -361,10 +363,10 @@ Statement* statement_for(Parser* parser) {
 
   if (initializer != NULL) {
     Statement* block = new_statement(STATEMENT_BLOCK);
-    block->u_stmt->block->stms = (Statement**)malloc(sizeof(Statement*) * 3);
-    block->u_stmt->block->stms[0] = initializer;
-    block->u_stmt->block->stms[1] = body;
-    block->u_stmt->block->stms[2] = NULL;
+    block->u_stmt->block->stmts = (Statement**)malloc(sizeof(Statement*) * 3);
+    block->u_stmt->block->stmts[0] = initializer;
+    block->u_stmt->block->stmts[1] = body;
+    block->u_stmt->block->stmts[2] = NULL;
     body = block;
   }
 
@@ -390,7 +392,7 @@ Statement* statement_block(Parser* parser) {
   stmts[i] = NULL;
   consume(parser, RIGHT_BRACE, "Expect '}' after block.");
   Statement* stmt = new_statement(STATEMENT_BLOCK);
-  stmt->u_stmt->block->stms = stmts;
+  stmt->u_stmt->block->stmts = stmts;
   return stmt;
 };
 

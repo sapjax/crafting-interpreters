@@ -112,7 +112,7 @@ bool hash_table_update(hash_table* ht, const char* key, void* obj) {
 
 void* hash_table_lookup(hash_table* ht, const char* key) {
   if (key == NULL || ht == NULL)
-    return false;
+    return NULL;
   size_t index = hash_table_index(ht, key);
 
   entry* tmp = ht->elements[index];

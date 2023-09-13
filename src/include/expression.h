@@ -57,6 +57,7 @@ typedef struct ExprCall {
 
 typedef struct ExprVariable {
   Token* name;
+  int depth;
 } ExprVariable;
 
 typedef struct ExprGrouping {
@@ -76,6 +77,7 @@ typedef struct ExprBinary {
 typedef struct ExprAssign {
   Token* name;
   struct Expr* value;
+  int depth;
 } ExprAssign;
 
 typedef struct ExprLogical {
@@ -109,7 +111,7 @@ typedef struct StatementVar {
 } StatementVar;
 
 typedef struct StatementBlock {
-  struct Statement** stms;
+  struct Statement** stmts;
 } StatementBlock;
 
 typedef struct StatementIf {
