@@ -8,6 +8,7 @@ Statement* statement_print(Parser* parser);
 Statement* statement_expression(Parser* parser);
 Statement* statement_block(Parser* parser);
 Statement* declare_var(Parser* parser);
+Statement* declare_class(Parser* parser);
 Statement* declare_fun(Parser* parser, char* kind);
 Statement* statement_if(Parser* parser);
 Statement* statement_while(Parser* parser);
@@ -49,6 +50,8 @@ Expr* new_unary(Token* op, Expr* right);
 Expr* new_literal(Token* value);
 Expr* new_call(Expr* callee, Token* paren, Expr** arguments);
 Expr* new_grouping(Expr* expression);
+Expr* new_get(Expr* object, Token* name);
+Expr* new_set(Expr* object, Token* name, Expr* value);
 Expr* new_variable(Token* value);
 Expr* new_assign(Token* name, Expr* value);
 Expr* new_logical(Expr* left, Token* op, Expr* right);
@@ -126,6 +129,25 @@ Expr* new_variable(Token* name) {
   return new_expr(u_expr, E_Variable);
 };
 
+Expr* new_get(Expr* object, Token* name) {
+  ExprGet* get = malloc(sizeof(ExprGet));
+  get->object = object;
+  get->name = name;
+  UnTaggedExpr* u_expr = new_untagged_expr();
+  u_expr->get = get;
+  return new_expr(u_expr, E_Get);
+};
+
+Expr* new_set(Expr* object, Token* name, Expr* value) {
+  ExprSet* set = malloc(sizeof(ExprSet));
+  set->object = object;
+  set->name = name;
+  set->value = value;
+  UnTaggedExpr* u_expr = new_untagged_expr();
+  u_expr->set = set;
+  return new_expr(u_expr, E_Set);
+};
+
 Expr* new_assign(Token* name, Expr* value) {
   ExprAssign* assign = malloc(sizeof(ExprAssign));
   assign->name = name;
@@ -162,6 +184,8 @@ Statement** parse(Parser* parser) {
 Statement* declaration(Parser* parser) {
   if (match(parser, VAR))
     return declare_var(parser);
+  if (match(parser, CLASS))
+    return declare_class(parser);
   if (match(parser, FUN))
     return declare_fun(parser, "function");
   return statement(parser);
@@ -193,6 +217,9 @@ Statement* new_statement(StatementType type) {
       break;
     case STATEMENT_FUNCTION:
       u_stmt->function = malloc(sizeof(StatementFunction));
+      break;
+    case STATEMENT_CLASS:
+      u_stmt->class = malloc(sizeof(StatementClass));
       break;
     case STATEMENT_RETURN:
       u_stmt->return_stmt = malloc(sizeof(StatementReturn));
@@ -229,6 +256,24 @@ Statement* declare_var(Parser* parser) {
   Statement* stmt = new_statement(STATEMENT_VAR);
   stmt->u_stmt->var->name = name;
   stmt->u_stmt->var->initializer = initializer;
+  return stmt;
+};
+
+Statement* declare_class(Parser* parser) {
+  Token* name = consume(parser, IDENTIFIER, "Expect class name.");
+  consume(parser, LEFT_BRACE, "Expect '{' before class body.");
+  Statement** methods = malloc(sizeof(Statement*) * 0 + sizeof(NULL));
+  int i = 0;
+  while (!check(parser, RIGHT_BRACE) && !is_at_end(parser)) {
+    methods = realloc(methods, sizeof(Statement*) * (i + 1) + sizeof(NULL));
+    methods[i] = declare_fun(parser, "method");
+    i++;
+  }
+  methods[i] = NULL;
+  consume(parser, RIGHT_BRACE, "Expect '}' after class body.");
+  Statement* stmt = new_statement(STATEMENT_CLASS);
+  stmt->u_stmt->class->name = name;
+  stmt->u_stmt->class->methods = methods;
   return stmt;
 };
 
@@ -409,6 +454,9 @@ Expr* assignment(Parser* parser) {
     if (expr->type == E_Variable) {
       Token* name = expr->u_expr->variable->name;
       return new_assign(name, value);
+    } else if (expr->type == E_Get) {
+      ExprGet* get = expr->u_expr->get;
+      return new_set(get->object, get->name, value);
     }
 
     free(value);
@@ -497,6 +545,11 @@ Expr* call(Parser* parser) {
   while (true) {
     if (match(parser, LEFT_PAREN)) {
       expr = finish_call(parser, expr);
+    } else if (match(parser, DOT)) {
+      Token* name =
+          consume(parser, IDENTIFIER, "Expect property name after '.'.");
+      expr = new_get(expr, name);
+
     } else {
       break;
     }

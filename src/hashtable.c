@@ -110,6 +110,17 @@ bool hash_table_update(hash_table* ht, const char* key, void* obj) {
   return true;
 };
 
+bool hash_table_upsert(hash_table* ht, const char* key, void* obj) {
+  if (key == NULL || obj == NULL || ht == NULL)
+    return false;
+  entry* tmp = hash_table_lookup(ht, key);
+  if (tmp == NULL) {
+    return hash_table_insert(ht, key, obj);
+  } else {
+    return hash_table_update(ht, key, obj);
+  }
+};
+
 void* hash_table_lookup(hash_table* ht, const char* key) {
   if (key == NULL || ht == NULL)
     return NULL;

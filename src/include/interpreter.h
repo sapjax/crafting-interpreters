@@ -16,12 +16,24 @@ typedef struct Function {
   Env* closure;
 } Function;
 
+typedef struct Class {
+  char* name;
+  hash_table* methods;
+} Class;
+
+typedef struct Instance {
+  Class* class;
+  hash_table* fields;
+} Instance;
+
 typedef union Value {
   char* string;
   double number;
   bool boolean;
   bool nil;
   Function* function;
+  Class* class;
+  Instance* instance;
 } Value;
 
 typedef enum ValueType {
@@ -29,7 +41,9 @@ typedef enum ValueType {
   V_NUMBER,
   V_BOOL,
   V_NIL,
-  V_FUNCTION
+  V_FUNCTION,
+  V_CLASS,
+  V_INSTANCE
 } ValueType;
 
 typedef struct {
@@ -70,6 +84,10 @@ Object* eval_assign(Expr* expr, Env* env);
 Object* eval_logical(Expr* expr, Env* env);
 
 Object* eval_call(Expr* expr, Env* env);
+
+Object* eval_get(Expr* expr, Env* env);
+
+Object* eval_set(Expr* expr, Env* env);
 
 void eval_block(Statement* stmt, Env* env);
 

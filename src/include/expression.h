@@ -25,7 +25,9 @@ typedef enum ExprType {
   E_Literal,
   E_Variable,
   E_Assign,
-  E_Logical
+  E_Logical,
+  E_Get,
+  E_Set,
 } ExprType;
 
 typedef union UnTaggedExpr {
@@ -33,6 +35,8 @@ typedef union UnTaggedExpr {
   struct ExprCall* call;
   struct ExprUnary* unary;
   struct ExprLiteral* literal;
+  struct ExprGet* get;
+  struct ExprSet* set;
   struct ExprGrouping* grouping;
   struct ExprVariable* variable;
   struct ExprAssign* assign;
@@ -59,6 +63,17 @@ typedef struct ExprVariable {
   Token* name;
   int depth;
 } ExprVariable;
+
+typedef struct ExprGet {
+  Expr* object;
+  Token* name;
+} ExprGet;
+
+typedef struct ExprSet {
+  Expr* object;
+  Token* name;
+  Expr* value;
+} ExprSet;
 
 typedef struct ExprGrouping {
   struct Expr* expression;
@@ -94,7 +109,8 @@ typedef enum StatementType {
   STATEMENT_IF,
   STATEMENT_WHILE,
   STATEMENT_FUNCTION,
-  STATEMENT_RETURN
+  STATEMENT_RETURN,
+  STATEMENT_CLASS
 } StatementType;
 
 typedef struct StatementExpression {
@@ -136,6 +152,11 @@ typedef struct StatementReturn {
   Expr* value;
 } StatementReturn;
 
+typedef struct StatementClass {
+  Token* name;
+  struct Statement** methods;
+} StatementClass;
+
 typedef union UnTaggedStatement {
   struct StatementExpression* expr;
   struct StatementPrint* print;
@@ -145,6 +166,7 @@ typedef union UnTaggedStatement {
   struct StatementFunction* function;
   struct StatementWhile* while_stmt;
   struct StatementReturn* return_stmt;
+  struct StatementClass* class;
 } UnTaggedStatement;
 
 typedef struct Statement {

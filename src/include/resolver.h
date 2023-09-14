@@ -4,7 +4,7 @@
 #include "expression.h"
 #include "stack.h"
 
-typedef enum _FunctionType { F_NONE, F_FUNCTION } FunctionType;
+typedef enum _FunctionType { F_NONE, F_FUNCTION, F_METHOD } FunctionType;
 
 typedef struct Resolver {
   stack scopes;
@@ -17,6 +17,7 @@ static void resolve_block(Resolver* resolver, StatementBlock* stmt);
 static void resolve_statements(Resolver* resolver, Statement** stmts);
 static void resolve_statement(Resolver* resolver, Statement* stmt);
 static void resolve_var_statement(Resolver* resolver, StatementVar* stmt);
+static void resolve_class_statement(Resolver* resolver, StatementClass* stmt);
 static void resolve_function_statement(Resolver* resolver,
                                        StatementFunction* stmt);
 static void resolve_function(Resolver* resolver,

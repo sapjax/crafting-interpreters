@@ -47,6 +47,9 @@ void resolve_statement(Resolver* resolver, Statement* stmt) {
     case STATEMENT_FUNCTION:
       resolve_function_statement(resolver, stmt->u_stmt->function);
       break;
+    case STATEMENT_CLASS:
+      resolve_class_statement(resolver, stmt->u_stmt->class);
+      break;
     case STATEMENT_BLOCK:
       resolve_block(resolver, stmt->u_stmt->block);
       break;
@@ -76,7 +79,6 @@ void resolve_statement(Resolver* resolver, Statement* stmt) {
       resolve_expr(resolver, stmt->u_stmt->while_stmt->condition);
       resolve_statement(resolver, stmt->u_stmt->while_stmt->body);
       break;
-
     default:
       break;
   }
@@ -88,6 +90,15 @@ void resolve_var_statement(Resolver* resolver, StatementVar* stmt) {
     resolve_expr(resolver, stmt->initializer);
   }
   define(resolver, stmt->name);
+};
+
+void resolve_class_statement(Resolver* resolver, StatementClass* stmt) {
+  declare(resolver, stmt->name);
+  define(resolver, stmt->name);
+
+  for (int i = 0; stmt->methods[i] != NULL; i++) {
+    resolve_function(resolver, stmt->methods[i]->u_stmt->function, F_METHOD);
+  }
 };
 
 void resolve_function_statement(Resolver* resolver, StatementFunction* stmt) {
@@ -171,6 +182,13 @@ void resolve_expr(Resolver* resolver, Expr* expr) {
     case E_Binary:
       resolve_expr(resolver, expr->u_expr->binary->left);
       resolve_expr(resolver, expr->u_expr->binary->right);
+      break;
+    case E_Get:
+      resolve_expr(resolver, expr->u_expr->get->object);
+      break;
+    case E_Set:
+      resolve_expr(resolver, expr->u_expr->set->value);
+      resolve_expr(resolver, expr->u_expr->set->object);
       break;
     case E_Call:
       resolve_expr(resolver, expr->u_expr->call->callee);

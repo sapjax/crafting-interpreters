@@ -142,6 +142,26 @@ void execute(Statement* statement, Env* env) {
       env_define(env, statement->u_stmt->function->name->lexeme, obj);
       break;
     }
+    case STATEMENT_CLASS: {
+      Object* obj = new_object();
+      obj->type = V_CLASS;
+      obj->value->class = (Class*)malloc(sizeof(Class));
+      obj->value->class->name = statement->u_stmt->class->name->lexeme;
+      obj->value->class->methods = hash_table_create(100, NULL);
+      for (int i = 0; statement->u_stmt->class->methods[i] != NULL; i++) {
+        Statement* method = statement->u_stmt->class->methods[i];
+        Object* fnObj = new_object();
+        fnObj->type = V_FUNCTION;
+        fnObj->value->function = malloc(sizeof(*fnObj->value->function));
+        fnObj->value->function->declaration = method->u_stmt->function;
+        fnObj->value->function->closure = env;
+        hash_table_insert(obj->value->class->methods,
+                          method->u_stmt->function->name->lexeme, fnObj);
+      }
+
+      env_define(env, statement->u_stmt->class->name->lexeme, obj);
+      break;
+    }
     case STATEMENT_RETURN: {
       if (strcmp(env->name, "interpret") == 0) {
         log_error("Can't return from top-level code.");
@@ -182,6 +202,10 @@ Object* evaluate(Expr* expr, Env* env) {
       return eval_unary(expr, env);
     case E_Call:
       return eval_call(expr, env);
+    case E_Get:
+      return eval_get(expr, env);
+    case E_Set:
+      return eval_set(expr, env);
     case E_Grouping:
       return eval_grouping(expr, env);
     case E_Binary:
@@ -200,6 +224,36 @@ Object* evaluate(Expr* expr, Env* env) {
 Object* eval_variable(Expr* expr, Env* env) {
   Env* declare_env = find_declare_env(env, expr->u_expr->variable->depth);
   return env_lookup(declare_env, expr->u_expr->variable->name->lexeme);
+};
+
+Object* eval_get(Expr* expr, Env* env) {
+  Object* obj = evaluate(expr->u_expr->get->object, env);
+  if (obj->type == V_INSTANCE) {
+    Object* value = hash_table_lookup(obj->value->instance->fields,
+                                      expr->u_expr->get->name->lexeme);
+    if (value != NULL) {
+      return value;
+    }
+    // if not found in instance, try to find in class
+    Class* class = obj->value->instance->class;
+    if (class != NULL) {
+      return hash_table_lookup(class->methods, expr->u_expr->get->name->lexeme);
+    }
+    log_error("Undefined property '%s'.", expr->u_expr->get->name->lexeme);
+  }
+  log_error("Only instances have properties.");
+  return NULL;
+};
+
+Object* eval_set(Expr* expr, Env* env) {
+  Object* obj = evaluate(expr->u_expr->set->object, env);
+  if (obj->type != V_INSTANCE) {
+    log_error("Only instances have fields.");
+  }
+  Object* value = evaluate(expr->u_expr->set->value, env);
+  hash_table_upsert(obj->value->instance->fields,
+                    expr->u_expr->set->name->lexeme, value);
+  return value;
 };
 
 Object* eval_literal(Expr* expr, Env* env) {
@@ -252,6 +306,16 @@ Object* eval_unary(Expr* expr, Env* env) {
 Object* eval_call(Expr* expr, Env* env) {
   // callee is a function object, which return by env_lookup in eval_literal
   Object* callee = evaluate(expr->u_expr->call->callee, env);
+
+  if (callee->type == V_CLASS) {
+    Object* instance = new_object();
+    instance->type = V_INSTANCE;
+    instance->value->instance = malloc(sizeof(Instance));
+    instance->value->instance->class = callee->value->class;
+    instance->value->instance->fields = hash_table_create(100, NULL);
+    return instance;
+  }
+
   Object** arguments = malloc(sizeof(Object*) + sizeof(NULL));
 
   Env* closure = callee->value->function->closure;
@@ -267,7 +331,7 @@ Object* eval_call(Expr* expr, Env* env) {
     i++;
   }
 
-  if (callee->type != V_FUNCTION) {
+  if (callee->type != V_FUNCTION && callee->type != V_CLASS) {
     log_error("Can only call functions and classes.");
   }
 

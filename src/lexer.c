@@ -83,6 +83,9 @@ void scan_token(Lexer* lexer) {
     case ',':
       add_token(lexer, COMMA);
       break;
+    case '.':
+      add_token(lexer, DOT);
+      break;
     case '-':
       add_token(lexer, MINUS);
       break;
