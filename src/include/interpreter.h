@@ -62,6 +62,7 @@ Env* find_declare_env(Env* env, int depth);
 Value* new_value();
 
 Object* new_object();
+Object* new_function_obj(StatementFunction* declaration, Env* closure);
 
 void interpret(Statement* statements[]);
 
@@ -88,6 +89,8 @@ Object* eval_call(Expr* expr, Env* env);
 Object* eval_get(Expr* expr, Env* env);
 
 Object* eval_set(Expr* expr, Env* env);
+
+Object* eval_this(Expr* expr, Env* env);
 
 void eval_block(Statement* stmt, Env* env);
 

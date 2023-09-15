@@ -86,6 +86,15 @@ Object* new_object() {
   return obj;
 };
 
+Object* new_function_obj(StatementFunction* declaration, Env* closure) {
+  Object* obj = new_object();
+  obj->type = V_FUNCTION;
+  obj->value->function = malloc(sizeof(*obj->value->function));
+  obj->value->function->declaration = declaration;
+  obj->value->function->closure = closure;
+  return obj;
+};
+
 // TODO: need to free Object* obj
 void execute(Statement* statement, Env* env) {
   switch (statement->type) {
@@ -133,12 +142,7 @@ void execute(Statement* statement, Env* env) {
     }
     // function declare
     case STATEMENT_FUNCTION: {
-      Object* obj = new_object();
-      obj->type = V_FUNCTION;
-      obj->value->function = malloc(sizeof(*obj->value->function));
-      obj->value->function->declaration = statement->u_stmt->function;
-      // record function's closure env
-      obj->value->function->closure = env;
+      Object* obj = new_function_obj(statement->u_stmt->function, env);
       env_define(env, statement->u_stmt->function->name->lexeme, obj);
       break;
     }
@@ -150,11 +154,7 @@ void execute(Statement* statement, Env* env) {
       obj->value->class->methods = hash_table_create(100, NULL);
       for (int i = 0; statement->u_stmt->class->methods[i] != NULL; i++) {
         Statement* method = statement->u_stmt->class->methods[i];
-        Object* fnObj = new_object();
-        fnObj->type = V_FUNCTION;
-        fnObj->value->function = malloc(sizeof(*fnObj->value->function));
-        fnObj->value->function->declaration = method->u_stmt->function;
-        fnObj->value->function->closure = env;
+        Object* fnObj = new_function_obj(method->u_stmt->function, env);
         hash_table_insert(obj->value->class->methods,
                           method->u_stmt->function->name->lexeme, fnObj);
       }
@@ -206,6 +206,8 @@ Object* evaluate(Expr* expr, Env* env) {
       return eval_get(expr, env);
     case E_Set:
       return eval_set(expr, env);
+    case E_This:
+      return eval_this(expr, env);
     case E_Grouping:
       return eval_grouping(expr, env);
     case E_Binary:
@@ -226,6 +228,11 @@ Object* eval_variable(Expr* expr, Env* env) {
   return env_lookup(declare_env, expr->u_expr->variable->name->lexeme);
 };
 
+Object* eval_this(Expr* expr, Env* env) {
+  Env* declare_env = find_declare_env(env, expr->u_expr->variable->depth);
+  return env_lookup(declare_env, "this");
+};
+
 Object* eval_get(Expr* expr, Env* env) {
   Object* obj = evaluate(expr->u_expr->get->object, env);
   if (obj->type == V_INSTANCE) {
@@ -237,7 +244,13 @@ Object* eval_get(Expr* expr, Env* env) {
     // if not found in instance, try to find in class
     Class* class = obj->value->instance->class;
     if (class != NULL) {
-      return hash_table_lookup(class->methods, expr->u_expr->get->name->lexeme);
+      Object* method =
+          hash_table_lookup(class->methods, expr->u_expr->get->name->lexeme);
+      if (method != NULL) {
+        Env* this_env = new_env(method->value->function->closure, "method");
+        env_define(this_env, "this", obj);
+        return new_function_obj(method->value->function->declaration, this_env);
+      }
     }
     log_error("Undefined property '%s'.", expr->u_expr->get->name->lexeme);
   }

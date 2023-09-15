@@ -28,6 +28,7 @@ typedef enum ExprType {
   E_Logical,
   E_Get,
   E_Set,
+  E_This,
 } ExprType;
 
 typedef union UnTaggedExpr {
@@ -37,6 +38,7 @@ typedef union UnTaggedExpr {
   struct ExprLiteral* literal;
   struct ExprGet* get;
   struct ExprSet* set;
+  struct ExprThis* this;
   struct ExprGrouping* grouping;
   struct ExprVariable* variable;
   struct ExprAssign* assign;
@@ -74,6 +76,11 @@ typedef struct ExprSet {
   Token* name;
   Expr* value;
 } ExprSet;
+
+typedef struct ExprThis {
+  Token* keyword;
+  int depth;
+} ExprThis;
 
 typedef struct ExprGrouping {
   struct Expr* expression;

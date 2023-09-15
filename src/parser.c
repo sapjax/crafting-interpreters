@@ -52,6 +52,7 @@ Expr* new_call(Expr* callee, Token* paren, Expr** arguments);
 Expr* new_grouping(Expr* expression);
 Expr* new_get(Expr* object, Token* name);
 Expr* new_set(Expr* object, Token* name, Expr* value);
+Expr* new_this(Token* keyword);
 Expr* new_variable(Token* value);
 Expr* new_assign(Token* name, Expr* value);
 Expr* new_logical(Expr* left, Token* op, Expr* right);
@@ -146,6 +147,16 @@ Expr* new_set(Expr* object, Token* name, Expr* value) {
   UnTaggedExpr* u_expr = new_untagged_expr();
   u_expr->set = set;
   return new_expr(u_expr, E_Set);
+};
+
+Expr* new_this(Token* keyword) {
+  ExprThis* this = malloc(sizeof(ExprThis));
+  this->keyword = keyword;
+  this->keyword->lexeme = "this";
+  this->depth = -1;
+  UnTaggedExpr* u_expr = new_untagged_expr();
+  u_expr->this = this;
+  return new_expr(u_expr, E_This);
 };
 
 Expr* new_assign(Token* name, Expr* value) {
@@ -576,6 +587,10 @@ Expr* finish_call(Parser* parser, Expr* callee) {
 Expr* primary(Parser* parser) {
   if (match_any(parser, (TokenType[]){FALSE, TRUE, NIL, STRING, NUMBER, -1})) {
     return new_literal(previous(parser));
+  }
+
+  if (match(parser, THIS)) {
+    return new_this(previous(parser));
   }
 
   if (match(parser, IDENTIFIER)) {

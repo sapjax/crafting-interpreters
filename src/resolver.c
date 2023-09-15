@@ -93,12 +93,21 @@ void resolve_var_statement(Resolver* resolver, StatementVar* stmt) {
 };
 
 void resolve_class_statement(Resolver* resolver, StatementClass* stmt) {
+  ClassType enclosing_class_type = resolver->cur_class_type;
+  resolver->cur_class_type = C_CLASS;
   declare(resolver, stmt->name);
   define(resolver, stmt->name);
+
+  begin_scope(resolver);
+  hash_table* scope = stack_top(resolver->scopes);
+  hash_table_insert(scope, "this", (void*)1);
 
   for (int i = 0; stmt->methods[i] != NULL; i++) {
     resolve_function(resolver, stmt->methods[i]->u_stmt->function, F_METHOD);
   }
+
+  end_scope(resolver);
+  resolver->cur_class_type = enclosing_class_type;
 };
 
 void resolve_function_statement(Resolver* resolver, StatementFunction* stmt) {
@@ -174,11 +183,12 @@ int resolve_local(Resolver* resolver, Token* name) {
 
 void resolve_expr(Resolver* resolver, Expr* expr) {
   switch (expr->type) {
-    case E_Assign:
+    case E_Assign: {
       resolve_expr(resolver, expr->u_expr->assign->value);
       int depth = resolve_local(resolver, expr->u_expr->assign->name);
       expr->u_expr->assign->depth = depth;
       break;
+    }
     case E_Binary:
       resolve_expr(resolver, expr->u_expr->binary->left);
       resolve_expr(resolver, expr->u_expr->binary->right);
@@ -190,6 +200,15 @@ void resolve_expr(Resolver* resolver, Expr* expr) {
       resolve_expr(resolver, expr->u_expr->set->value);
       resolve_expr(resolver, expr->u_expr->set->object);
       break;
+    case E_This: {
+      if (resolver->cur_class_type == C_NONE) {
+        log_error("Can't use 'this' outside of a class.");
+        return;
+      }
+      int depth = resolve_local(resolver, expr->u_expr->this->keyword);
+      expr->u_expr->this->depth = depth;
+      break;
+    }
     case E_Call:
       resolve_expr(resolver, expr->u_expr->call->callee);
       Expr** args = expr->u_expr->call->arguments;
