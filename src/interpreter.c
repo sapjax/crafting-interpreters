@@ -86,12 +86,15 @@ Object* new_object() {
   return obj;
 };
 
-Object* new_function_obj(StatementFunction* declaration, Env* closure) {
+Object* new_function_obj(StatementFunction* declaration,
+                         Env* closure,
+                         bool is_initializer) {
   Object* obj = new_object();
   obj->type = V_FUNCTION;
   obj->value->function = malloc(sizeof(*obj->value->function));
   obj->value->function->declaration = declaration;
   obj->value->function->closure = closure;
+  obj->value->function->is_initializer = is_initializer;
   return obj;
 };
 
@@ -142,7 +145,7 @@ void execute(Statement* statement, Env* env) {
     }
     // function declare
     case STATEMENT_FUNCTION: {
-      Object* obj = new_function_obj(statement->u_stmt->function, env);
+      Object* obj = new_function_obj(statement->u_stmt->function, env, false);
       env_define(env, statement->u_stmt->function->name->lexeme, obj);
       break;
     }
@@ -154,9 +157,11 @@ void execute(Statement* statement, Env* env) {
       obj->value->class->methods = hash_table_create(100, NULL);
       for (int i = 0; statement->u_stmt->class->methods[i] != NULL; i++) {
         Statement* method = statement->u_stmt->class->methods[i];
-        Object* fnObj = new_function_obj(method->u_stmt->function, env);
-        hash_table_insert(obj->value->class->methods,
-                          method->u_stmt->function->name->lexeme, fnObj);
+        StatementFunction* fn_stmt = method->u_stmt->function;
+        bool is_init = strcmp(fn_stmt->name->lexeme, "init") == 0;
+        Object* fnObj = new_function_obj(fn_stmt, env, is_init);
+        hash_table_insert(obj->value->class->methods, fn_stmt->name->lexeme,
+                          fnObj);
       }
 
       env_define(env, statement->u_stmt->class->name->lexeme, obj);
@@ -247,9 +252,11 @@ Object* eval_get(Expr* expr, Env* env) {
       Object* method =
           hash_table_lookup(class->methods, expr->u_expr->get->name->lexeme);
       if (method != NULL) {
-        Env* this_env = new_env(method->value->function->closure, "method");
+        Function* fn = method->value->function;
+        Env* this_env = new_env(fn->closure, "method");
         env_define(this_env, "this", obj);
-        return new_function_obj(method->value->function->declaration, this_env);
+        bool is_init = strcmp(fn->declaration->name->lexeme, "init") == 0;
+        return new_function_obj(fn->declaration, this_env, is_init);
       }
     }
     log_error("Undefined property '%s'.", expr->u_expr->get->name->lexeme);
@@ -321,17 +328,38 @@ Object* eval_call(Expr* expr, Env* env) {
   Object* callee = evaluate(expr->u_expr->call->callee, env);
 
   if (callee->type == V_CLASS) {
-    Object* instance = new_object();
-    instance->type = V_INSTANCE;
-    instance->value->instance = malloc(sizeof(Instance));
-    instance->value->instance->class = callee->value->class;
-    instance->value->instance->fields = hash_table_create(100, NULL);
-    return instance;
+    return _eval_call_class(callee, expr, env);
+  } else if (callee->type == V_FUNCTION) {
+    return _eval_call_function(callee, expr, env);
+  } else {
+    log_error("Can only call functions and classes.");
+  }
+  free(callee);
+  return NULL;
+};
+
+Object* _eval_call_class(Object* callee, Expr* expr, Env* env) {
+  Object* instance = new_object();
+  instance->type = V_INSTANCE;
+  instance->value->instance = malloc(sizeof(Instance));
+  instance->value->instance->class = callee->value->class;
+  instance->value->instance->fields = hash_table_create(100, NULL);
+
+  // find and call initializer
+  Object* initializer =
+      hash_table_lookup(callee->value->class->methods, "init");
+  if (initializer != NULL) {
+    // bind this to instance for invoking init() directly
+    env_define(initializer->value->function->closure, "this", instance);
+    _eval_call_function(initializer, expr, env);
   }
 
-  Object** arguments = malloc(sizeof(Object*) + sizeof(NULL));
+  return instance;
+};
 
+Object* _eval_call_function(Object* callee, Expr* expr, Env* env) {
   Env* closure = callee->value->function->closure;
+  Object** arguments = malloc(sizeof(Object*) + sizeof(NULL));
   Env* fn_env = new_env(closure, "function");
 
   int i = 0;
@@ -344,10 +372,6 @@ Object* eval_call(Expr* expr, Env* env) {
     i++;
   }
 
-  if (callee->type != V_FUNCTION && callee->type != V_CLASS) {
-    log_error("Can only call functions and classes.");
-  }
-
   // set a global variable for function return value
   latest_return_value = new_object();
   function_returned = false;
@@ -355,6 +379,11 @@ Object* eval_call(Expr* expr, Env* env) {
   function_returned = false;
   free(arguments);
   free(fn_env);
+
+  // if function is initializer, return the instance
+  if (callee->value->function->is_initializer) {
+    return env_lookup(closure, "this");
+  }
   // check the return value
   return latest_return_value;
 };

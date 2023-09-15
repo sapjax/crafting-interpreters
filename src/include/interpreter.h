@@ -14,6 +14,7 @@ typedef struct Env {
 typedef struct Function {
   StatementFunction* declaration;
   Env* closure;
+  bool is_initializer;
 } Function;
 
 typedef struct Class {
@@ -62,7 +63,9 @@ Env* find_declare_env(Env* env, int depth);
 Value* new_value();
 
 Object* new_object();
-Object* new_function_obj(StatementFunction* declaration, Env* closure);
+Object* new_function_obj(StatementFunction* declaration,
+                         Env* closure,
+                         bool is_initializer);
 
 void interpret(Statement* statements[]);
 
@@ -85,6 +88,8 @@ Object* eval_assign(Expr* expr, Env* env);
 Object* eval_logical(Expr* expr, Env* env);
 
 Object* eval_call(Expr* expr, Env* env);
+Object* _eval_call_function(Object* callee, Expr* expr, Env* env);
+Object* _eval_call_class(Object* callee, Expr* expr, Env* env);
 
 Object* eval_get(Expr* expr, Env* env);
 
