@@ -7,9 +7,11 @@
 static Env* global_env = NULL;
 void* latest_return_value = NULL;
 bool function_returned = false;
+void** mem_unreleased;
 
 void interpret(Statement** statements) {
   global_env = new_env(NULL, "global");
+  mem_unreleased = malloc(sizeof(mem_unreleased));
   for (int i = 0; statements[i] != NULL; i++) {
     Statement* stmt = statements[i];
     execute(stmt, global_env);
@@ -17,6 +19,7 @@ void interpret(Statement** statements) {
   free(statements);
   env_free(global_env);
   free(latest_return_value);
+  free_mem_unreleased();
 };
 
 Env* new_env(Env* enclosing, char* name) {
@@ -79,10 +82,27 @@ Value* new_value() {
   return v;
 };
 
+void record_mem_unreleased(void* obj) {
+  int size = sizeof(mem_unreleased) / sizeof(void*);
+  mem_unreleased = realloc(mem_unreleased, sizeof(void*) * (size + 1));
+  mem_unreleased[size] = obj;
+};
+
+void free_mem_unreleased() {
+  int size = sizeof(mem_unreleased) / sizeof(mem_unreleased[0]);
+  for (int i = 0; i < size; i++) {
+    if (mem_unreleased[i] != NULL) {
+      free(mem_unreleased[i]);
+    }
+  }
+  free(mem_unreleased);
+}
+
 Object* new_object() {
   Object* obj = malloc(sizeof(*obj));
   obj->type = V_NIL;
   obj->value = new_value();
+  record_mem_unreleased(obj);
   return obj;
 };
 
@@ -98,14 +118,12 @@ Object* new_function_obj(StatementFunction* declaration,
   return obj;
 };
 
-// TODO: need to free Object* obj
 void execute(Statement* statement, Env* env) {
   switch (statement->type) {
     case STATEMENT_EXPRESSION: {
       evaluate(statement->u_stmt->expr->expr, env);
       // NOTE: we can't free object here, cause in expression we may define a
       // variable in env,  if we free the object, the variable may be freed too
-      // instead we free all objects in env_free.
       break;
     }
     case STATEMENT_PRINT: {
@@ -124,6 +142,7 @@ void execute(Statement* statement, Env* env) {
     case STATEMENT_BLOCK: {
       Env* block_env = new_env(env, "block");
       eval_block(statement, block_env);
+
       break;
     }
     case STATEMENT_IF: {
@@ -133,7 +152,6 @@ void execute(Statement* statement, Env* env) {
       } else if (statement->u_stmt->if_stmt->else_branch != NULL) {
         execute(statement->u_stmt->if_stmt->else_branch, env);
       }
-      free(obj);
       break;
     }
     case STATEMENT_WHILE: {
@@ -182,6 +200,7 @@ void execute(Statement* statement, Env* env) {
 
       // can't free super_env here, cause it will be used in function's closure
       env_define(env, statement->u_stmt->class->name->lexeme, class);
+      record_mem_unreleased(super_env);
       break;
     }
     case STATEMENT_RETURN: {
@@ -212,6 +231,7 @@ void eval_block(Statement* stmt, Env* env) {
   }
   // NOTE: we can't free env here, cause in this block may define a function
   // this env will be used in function's closure
+  record_mem_unreleased(env);
 }
 
 Object* evaluate(Expr* expr, Env* env) {
@@ -363,7 +383,6 @@ Object* eval_unary(Expr* expr, Env* env) {
     default:
       break;
   }
-  free(right);
   return obj;
 };
 
@@ -504,7 +523,6 @@ Object* eval_binary(Expr* expr, Env* env) {
     default:
       break;
   }
-  // free(right);
   return obj;
 };
 
@@ -532,7 +550,6 @@ Object* eval_logical(Expr* expr, Env* env) {
       return left;
     }
   }
-  free(left);
   return evaluate(expr->u_expr->logical->right, env);
 };
 

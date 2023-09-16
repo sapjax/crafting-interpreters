@@ -63,6 +63,7 @@ Env* find_declare_env(Env* env, int depth);
 
 Value* new_value();
 Object* new_object();
+void free_mem_unreleased();
 Object* new_function_obj(StatementFunction* declaration,
                          Env* closure,
                          bool is_initializer);
