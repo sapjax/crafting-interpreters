@@ -53,6 +53,7 @@ Expr* new_grouping(Expr* expression);
 Expr* new_get(Expr* object, Token* name);
 Expr* new_set(Expr* object, Token* name, Expr* value);
 Expr* new_this(Token* keyword);
+Expr* new_super(Token* keyword, Token* method);
 Expr* new_variable(Token* value);
 Expr* new_assign(Token* name, Expr* value);
 Expr* new_logical(Expr* left, Token* op, Expr* right);
@@ -157,6 +158,17 @@ Expr* new_this(Token* keyword) {
   UnTaggedExpr* u_expr = new_untagged_expr();
   u_expr->this = this;
   return new_expr(u_expr, E_This);
+};
+
+Expr* new_super(Token* keyword, Token* method) {
+  ExprSuper* super = malloc(sizeof(ExprSuper));
+  super->keyword = keyword;
+  super->keyword->lexeme = "super";
+  super->method = method;
+  super->depth = -1;
+  UnTaggedExpr* u_expr = new_untagged_expr();
+  u_expr->super = super;
+  return new_expr(u_expr, E_Super);
 };
 
 Expr* new_assign(Token* name, Expr* value) {
@@ -272,6 +284,13 @@ Statement* declare_var(Parser* parser) {
 
 Statement* declare_class(Parser* parser) {
   Token* name = consume(parser, IDENTIFIER, "Expect class name.");
+
+  Expr* superclass = NULL;
+  if (match(parser, LESS)) {
+    consume(parser, IDENTIFIER, "Expect superclass name.");
+    superclass = new_variable(previous(parser));
+  }
+
   consume(parser, LEFT_BRACE, "Expect '{' before class body.");
   Statement** methods = malloc(sizeof(Statement*) * 0 + sizeof(NULL));
   int i = 0;
@@ -282,9 +301,11 @@ Statement* declare_class(Parser* parser) {
   }
   methods[i] = NULL;
   consume(parser, RIGHT_BRACE, "Expect '}' after class body.");
+
   Statement* stmt = new_statement(STATEMENT_CLASS);
   stmt->u_stmt->class->name = name;
   stmt->u_stmt->class->methods = methods;
+  stmt->u_stmt->class->superclass = superclass;
   return stmt;
 };
 
@@ -587,6 +608,14 @@ Expr* finish_call(Parser* parser, Expr* callee) {
 Expr* primary(Parser* parser) {
   if (match_any(parser, (TokenType[]){FALSE, TRUE, NIL, STRING, NUMBER, -1})) {
     return new_literal(previous(parser));
+  }
+
+  if (match(parser, SUPER)) {
+    Token* keyword = previous(parser);
+    consume(parser, DOT, "Expect '.' after 'super'.");
+    Token* method =
+        consume(parser, IDENTIFIER, "Expect superclass method name.");
+    return new_super(keyword, method);
   }
 
   if (match(parser, THIS)) {

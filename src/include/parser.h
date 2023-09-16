@@ -16,9 +16,9 @@ typedef struct Parser {
         factor         → unary ( ( "/" | "*" ) unary )* ;
         unary          → ( "!" | "-" ) unary
                                 | primary ;
-        primary        → NUMBER | STRING | "true" | "false" | "nil"
-                                | "(" expression ")"
-                                | IDENTIFIER ;
+        primary        → "true" | "false" | "nil" | "this"
+                          | NUMBER | STRING | IDENTIFIER | "(" expression ")"
+                          | "super" "." IDENTIFIER ;
 */
 
 Parser* new_parser(Token** tokens, int num_tokens);

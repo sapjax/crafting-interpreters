@@ -6,7 +6,7 @@
 
 typedef enum _FunctionType { F_NONE, F_FUNCTION, F_METHOD } FunctionType;
 
-typedef enum _ClassType { C_NONE, C_CLASS } ClassType;
+typedef enum _ClassType { C_NONE, C_CLASS, C_SUBCLASS } ClassType;
 
 typedef struct Resolver {
   stack scopes;

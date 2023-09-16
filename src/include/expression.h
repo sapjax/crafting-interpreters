@@ -29,6 +29,7 @@ typedef enum ExprType {
   E_Get,
   E_Set,
   E_This,
+  E_Super,
 } ExprType;
 
 typedef union UnTaggedExpr {
@@ -39,6 +40,7 @@ typedef union UnTaggedExpr {
   struct ExprGet* get;
   struct ExprSet* set;
   struct ExprThis* this;
+  struct ExprSuper* super;
   struct ExprGrouping* grouping;
   struct ExprVariable* variable;
   struct ExprAssign* assign;
@@ -81,6 +83,12 @@ typedef struct ExprThis {
   Token* keyword;
   int depth;
 } ExprThis;
+
+typedef struct ExprSuper {
+  Token* keyword;
+  Token* method;
+  int depth;
+} ExprSuper;
 
 typedef struct ExprGrouping {
   struct Expr* expression;
@@ -162,6 +170,7 @@ typedef struct StatementReturn {
 typedef struct StatementClass {
   Token* name;
   struct Statement** methods;
+  Expr* superclass;
 } StatementClass;
 
 typedef union UnTaggedStatement {

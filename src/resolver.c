@@ -1,5 +1,6 @@
 #include "include/resolver.h"
 #include <stdlib.h>
+#include <string.h>
 #include "include/hashtable.h"
 #include "include/log.h"
 #include "include/token.h"
@@ -98,6 +99,21 @@ void resolve_class_statement(Resolver* resolver, StatementClass* stmt) {
   declare(resolver, stmt->name);
   define(resolver, stmt->name);
 
+  if (stmt->superclass != NULL) {
+    if (strcmp(stmt->name->lexeme,
+               stmt->superclass->u_expr->variable->name->lexeme) == 0) {
+      log_error("A class can't inherit from itself.");
+    }
+    resolve_expr(resolver, stmt->superclass);
+  }
+
+  if (stmt->superclass != NULL) {
+    resolver->cur_class_type = C_SUBCLASS;
+    begin_scope(resolver);
+    hash_table* scope = stack_top(resolver->scopes);
+    hash_table_insert(scope, "super", (void*)1);
+  }
+
   begin_scope(resolver);
   hash_table* scope = stack_top(resolver->scopes);
   hash_table_insert(scope, "this", (void*)1);
@@ -107,6 +123,11 @@ void resolve_class_statement(Resolver* resolver, StatementClass* stmt) {
   }
 
   end_scope(resolver);
+
+  if (stmt->superclass != NULL) {
+    end_scope(resolver);
+  }
+
   resolver->cur_class_type = enclosing_class_type;
 };
 
@@ -207,6 +228,16 @@ void resolve_expr(Resolver* resolver, Expr* expr) {
       }
       int depth = resolve_local(resolver, expr->u_expr->this->keyword);
       expr->u_expr->this->depth = depth;
+      break;
+    }
+    case E_Super: {
+      if (resolver->cur_class_type == C_NONE) {
+        log_error("Can't use 'super' outside of a class.");
+      } else if (resolver->cur_class_type != C_SUBCLASS) {
+        log_error("Can't use 'super' in a class with no superclass.");
+      }
+      int depth = resolve_local(resolver, expr->u_expr->super->keyword);
+      expr->u_expr->super->depth = depth;
       break;
     }
     case E_Call:

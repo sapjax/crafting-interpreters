@@ -150,21 +150,38 @@ void execute(Statement* statement, Env* env) {
       break;
     }
     case STATEMENT_CLASS: {
-      Object* obj = new_object();
-      obj->type = V_CLASS;
-      obj->value->class = (Class*)malloc(sizeof(Class));
-      obj->value->class->name = statement->u_stmt->class->name->lexeme;
-      obj->value->class->methods = hash_table_create(100, NULL);
+      Object* superclassObj = new_object();
+      Expr* sp = statement->u_stmt->class->superclass;
+      Env* super_env = NULL;
+      if (sp != NULL) {
+        superclassObj = evaluate(sp, env);
+        if (sp->type != V_CLASS) {
+          log_error("Superclass must be a class.",
+                    sp->u_expr->variable->name->lexeme);
+        }
+        // create a new env for  superclass
+        super_env = new_env(env, "super");
+        env_define(super_env, "super", superclassObj);
+      }
+
+      Object* class = new_object();
+      class->type = V_CLASS;
+      class->value->class = (Class*)malloc(sizeof(Class));
+      class->value->class->name = statement->u_stmt->class->name->lexeme;
+      class->value->class->methods = hash_table_create(100, NULL);
+      class->value->class->superclass = superclassObj->value->class;
       for (int i = 0; statement->u_stmt->class->methods[i] != NULL; i++) {
         Statement* method = statement->u_stmt->class->methods[i];
         StatementFunction* fn_stmt = method->u_stmt->function;
         bool is_init = strcmp(fn_stmt->name->lexeme, "init") == 0;
-        Object* fnObj = new_function_obj(fn_stmt, env, is_init);
-        hash_table_insert(obj->value->class->methods, fn_stmt->name->lexeme,
+        // use super_env here, which bind `super` to superclass
+        Object* fnObj = new_function_obj(fn_stmt, super_env, is_init);
+        hash_table_insert(class->value->class->methods, fn_stmt->name->lexeme,
                           fnObj);
       }
 
-      env_define(env, statement->u_stmt->class->name->lexeme, obj);
+      // can't free super_env here, cause it will be used in function's closure
+      env_define(env, statement->u_stmt->class->name->lexeme, class);
       break;
     }
     case STATEMENT_RETURN: {
@@ -213,6 +230,8 @@ Object* evaluate(Expr* expr, Env* env) {
       return eval_set(expr, env);
     case E_This:
       return eval_this(expr, env);
+    case E_Super:
+      return eval_super(expr, env);
     case E_Grouping:
       return eval_grouping(expr, env);
     case E_Binary:
@@ -238,6 +257,24 @@ Object* eval_this(Expr* expr, Env* env) {
   return env_lookup(declare_env, "this");
 };
 
+Object* eval_super(Expr* expr, Env* env) {
+  Env* declare_env = find_declare_env(env, expr->u_expr->super->depth);
+  Object* superclass = env_lookup(declare_env, "super");
+  Env* instance_declare_env =
+      find_declare_env(env, expr->u_expr->super->depth - 1);
+
+  Object* method = hash_table_lookup(superclass->value->class->methods,
+                                     expr->u_expr->super->method->lexeme);
+
+  if (method == NULL) {
+    log_error("Undefined property '%s'.", expr->u_expr->super->method->lexeme);
+    return NULL;
+  }
+
+  method->value->function->closure = instance_declare_env;
+  return method;
+};
+
 Object* eval_get(Expr* expr, Env* env) {
   Object* obj = evaluate(expr->u_expr->get->object, env);
   if (obj->type == V_INSTANCE) {
@@ -251,6 +288,13 @@ Object* eval_get(Expr* expr, Env* env) {
     if (class != NULL) {
       Object* method =
           hash_table_lookup(class->methods, expr->u_expr->get->name->lexeme);
+
+      // if not found in class, try to find in superclass
+      if (method == NULL && class->superclass != NULL) {
+        method = hash_table_lookup(class->superclass->methods,
+                                   expr->u_expr->get->name->lexeme);
+      }
+
       if (method != NULL) {
         Function* fn = method->value->function;
         Env* this_env = new_env(fn->closure, "method");

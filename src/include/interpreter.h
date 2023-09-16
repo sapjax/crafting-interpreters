@@ -19,6 +19,7 @@ typedef struct Function {
 
 typedef struct Class {
   char* name;
+  struct Class* superclass;
   hash_table* methods;
 } Class;
 
@@ -61,52 +62,35 @@ void env_free(Env* env);
 Env* find_declare_env(Env* env, int depth);
 
 Value* new_value();
-
 Object* new_object();
 Object* new_function_obj(StatementFunction* declaration,
                          Env* closure,
                          bool is_initializer);
 
 void interpret(Statement* statements[]);
-
 void execute(Statement* statement, Env* env);
-
 Object* evaluate(Expr* expr, Env* env);
 
 Object* eval_variable(Expr* expr, Env* env);
-
 Object* eval_literal(Expr* expr, Env* env);
-
 Object* eval_unary(Expr* expr, Env* env);
-
 Object* eval_grouping(Expr* expr, Env* env);
-
 Object* eval_binary(Expr* expr, Env* env);
-
 Object* eval_assign(Expr* expr, Env* env);
-
 Object* eval_logical(Expr* expr, Env* env);
-
 Object* eval_call(Expr* expr, Env* env);
 Object* _eval_call_function(Object* callee, Expr* expr, Env* env);
 Object* _eval_call_class(Object* callee, Expr* expr, Env* env);
-
 Object* eval_get(Expr* expr, Env* env);
-
 Object* eval_set(Expr* expr, Env* env);
-
 Object* eval_this(Expr* expr, Env* env);
-
+Object* eval_super(Expr* expr, Env* env);
 void eval_block(Statement* stmt, Env* env);
 
 bool is_truthy(Object* obj);
-
 bool is_logical_truthy(Object* obj);
-
 void check_number_operand(Token* op, Object* left, Object* right);
-
 char* stringify(Object* obj);
-
 bool is_equal(Object* a, Object* b);
 
 #endif
